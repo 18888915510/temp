@@ -65,11 +65,12 @@ function material(c) {
   return L.join('\n');
 }
 
-function prompt(c) {
+// mat / now：端到端评测（e2e-bench.js）传入召回出来的材料和平移后的「现在」；不传时用用例本身。
+function prompt(c, mat = material(c), now = c.eval_time) {
   const me = PEOPLE.find(p => p.id.startsWith('u_'));
   const people = PEOPLE.map(p => `- ${p.id}：${p.name}，邮箱 ${p.email}${p.email_display_name ? `（邮件显示名 ${p.email_display_name}）` : ''}，WeLink 名 ${p.welink_name}${p.aliases ? `，别称 ${p.aliases.join('、')}` : ''}，${p.role}`).join('\n');
   const lists = (DATA.distribution_lists || []).map(l => `- ${l.display_name} <${l.address}>：${Array.isArray(l.members) ? l.members.join('、') : l.members}`).join('\n');
-  return `你是 HR 的工作助理。当前用户：${me.name}（${me.id}）。现在时间：${withWeek(c.eval_time)}，时区 +08:00。
+  return `你是 HR 的工作助理。当前用户：${me.name}（${me.id}）。现在时间：${withWeek(now)}，时区 +08:00。
 任务：把下面的邮件、群聊、私聊按「事项」归并，站在当前用户的角度，分清「谁还要交给我」和「我要交给谁」，列出交付内容、截止日期、最新要求、每个对方的交付状态，并标出每条消息属于哪个事项。
 
 规则：
@@ -93,7 +94,7 @@ ${people}
 ${lists}
 
 ---
-${material(c)}
+${mat}
 ---
 
 只输出一个 JSON，不要解释，不要代码块标记。格式：
@@ -190,7 +191,9 @@ function align(gold, pred, goldLabels, predLabels) {
   return map; // gold id → pred id
 }
 
-function score(c, out) {
+// safe：报告里不带模型自由写的文字（事项名、表外人名），端到端评测用，因为那里的候选含真实消息。
+// seen：端到端评测里模型实际看到的消息编号。没看到的无关消息算对（召回已经正确排除了）；没看到的相关消息仍算错，并注明是召回漏掉。
+function score(c, out, { safe = false, seen = null } = {}) {
   const gold = goldMatters(c), goldLabels = c.expected.message_labels;
   const pred = arr(out?.matters), predLabels = arr(out?.message_labels);
   const map = align(gold, pred, goldLabels, predLabels), back = new Map([...map].map(([g, p]) => [p, g]));
@@ -203,6 +206,13 @@ function score(c, out) {
   let linkTP = 0, linkFP = 0, linkFN = 0;
   for (const g of goldLabels) {
     const p = predLabels.find(x => x.msg_id === g.msg_id);
+    if (seen && !seen.has(g.msg_id)) {
+      const relevant = arr(g.matter).length > 0;
+      if (relevant) linkFN++;
+      add('消息归属', !relevant, `${g.msg_id}：应为 ${arr(g.matter).join(',')}，召回漏掉`);
+      add('消息作用', !relevant, `${g.msg_id}：应为 ${g.type}，召回漏掉`);
+      continue;
+    }
     const gm = arr(g.matter).slice().sort().join(','), pm = arr(p?.matter).map(id => back.get(id) || `?${id}`).sort().join(',');
     const gRel = arr(g.matter).length > 0, pRel = arr(p?.matter).length > 0;
     if (gRel && pRel) linkTP++; else if (!gRel && pRel) linkFP++; else if (gRel && !pRel && !['ack', 'not_applicable_to_user'].includes(g.type)) linkFN++;
@@ -217,7 +227,7 @@ function score(c, out) {
     const p = pred.find(x => x.id === map.get(g.matter_id));
     const tag = `${g.matter_id}「${g.title}」`;
     if (!p) { add('事项识别', false, `${tag}：没找到对应事项`); continue; }
-    add('事项识别', true, `${tag} ↔ 模型 ${p.id}「${p.title || ''}」`);
+    add('事项识别', true, safe ? `${tag} ↔ 模型 ${p.id}` : `${tag} ↔ 模型 ${p.id}「${p.title || ''}」`);
     add('方向', p.direction === g.direction, `${tag}：应为 ${g.direction}，模型 ${p.direction}`);
     add('截止日期', day(p.deadline) === g.deadline, `${tag}：应为 ${g.deadline}，模型 ${p.deadline || '无'}`);
     if (g.downstream_deadline) add('截止日期', day(p.downstream_deadline) === g.downstream_deadline, `${tag} 下游：应为 ${g.downstream_deadline}，模型 ${p.downstream_deadline || '无'}`);
@@ -227,7 +237,7 @@ function score(c, out) {
       add('对方状态', hit && hit.status === gc.status, `${tag} ${gc.person}${gc.side ? '（' + gc.side + '）' : ''}：应为 ${gc.status}，模型 ${hit ? hit.status : '未列出'}`);
     }
     const extra = pc.filter(x => !g.counterparties.some(gc => gc.person === personId(x.person)));
-    if (extra.length) add('对方状态', false, `${tag}：多列了 ${extra.map(x => x.person).join('、')}`);
+    if (extra.length) add('对方状态', false, `${tag}：多列了 ${extra.map(x => PEOPLE.some(q => q.id === personId(x.person)) ? personId(x.person) : '表外人员').join('、')}`);
     // 要求：看出处是否覆盖（文字是否对，交给人在 report.md 里看）。
     const srcs = new Set(arr(p.requirements).map(r => r.source));
     for (const gr of g.requirements || []) add('最新要求（出处）', srcs.has(gr.source), `${tag}「${gr.text}」出自 ${gr.source}：${srcs.has(gr.source) ? '已列出' : '漏了'}`);
@@ -243,10 +253,13 @@ function score(c, out) {
 }
 
 // ---------- 主流程 ----------
+async function initCli() {
+  try { HELP = execFileSync(CLI, ['--help'], { encoding: 'utf8', shell: process.platform === 'win32', windowsHide: true, timeout: 60000 }); } catch (e) { HELP = String(e.stdout || ''); }
+}
 async function main() {
   fs.mkdirSync(path.join(OUT, 'raw'), { recursive: true });
   fs.mkdirSync(path.join(OUT, 'ws'), { recursive: true });
-  try { HELP = execFileSync(CLI, ['--help'], { encoding: 'utf8', shell: process.platform === 'win32', windowsHide: true, timeout: 60000 }); } catch (e) { HELP = String(e.stdout || ''); }
+  await initCli();
   log(`CLI ${CLI} · 模型 ${MODEL}${EFFORT ? ' · 思考档 ' + EFFORT : ''} · 用例 ${CASES.map(c => c.case_id).join(',')} × ${REPEAT} 遍 · 输出 ${OUT}`);
 
   const jobs = [];
@@ -300,4 +313,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
-module.exports = { prompt, score, parseJson, goldMatters, align };
+module.exports = { prompt, score, parseJson, goldMatters, align, run, pool, initCli, withWeek, CLI, MODEL };

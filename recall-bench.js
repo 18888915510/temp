@@ -193,16 +193,19 @@ function anchors(byConv, overlap, people) {
   return out;
 }
 
+// 真实群按消息数从多到少（B 难度把用例并进最活跃的群）。
+function realGroupsOf(snap) {
+  const count = new Map();
+  for (const m of snap.messages) if (m.group && !m.mail) count.set(m.conv, (count.get(m.conv) || 0) + 1);
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => ({ id, name: (snap.convs.find(c => c.id === id) || {}).name || id }));
+}
+
 // ---------- 主流程 ----------
 function main() {
   const snap = loadSnapshots();
   if (!snap.files.length) { console.log(JSON.stringify({ ok: false, error: '没找到 Hub 的消息快照（raw-日期.json）。请确认助理页能看到消息，或用 --dir 指定助理目录。', dir: DIR.replace(HOME, '%USERPROFILE%') })); process.exit(1); }
   fs.mkdirSync(OUT, { recursive: true });
-  const realGroups = (() => {
-    const count = new Map();
-    for (const m of snap.messages) if (m.group && !m.mail) count.set(m.conv, (count.get(m.conv) || 0) + 1);
-    return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => ({ id, name: (snap.convs.find(c => c.id === id) || {}).name || id }));
-  })();
+  const realGroups = realGroupsOf(snap);
   log(`读了 ${snap.files.length} 份快照，真实消息 ${snap.messages.length} 条，会话 ${snap.convs.length} 个，真实群 ${realGroups.length} 个`);
 
   const rows = [], local = [];
@@ -283,4 +286,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { tokens, recall, participants };
+module.exports = { tokens, recall, participants, loadSnapshots, injected, idfOf, realGroupsOf, DATA, ME, WEEK, KEY_TYPES, DIR, HOME };
