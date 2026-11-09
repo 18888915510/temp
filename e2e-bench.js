@@ -49,6 +49,30 @@ function buildMaterial(c, shift, seeds, cands) {
   return { text: L.join('\n'), realCount: ids.size, realIds: new Set(ids.values()) };
 }
 
+// 用例消息整体平移了 shift 毫秒。由相对时间（「明天下班前」「周四前」）算出来的截止日期要跟着平移，
+// 否则模型按平移后的发送时间算出的日期会和没平移的标准答案差整整 shift，被误判成错。
+// 标准答案里这类日期都带 current_note（写明按哪条消息的发送时间解析）；写死日期的（11月20日）不平移。
+function shiftExpected(exp, shift) {
+  const shiftStr = s => {
+    if (typeof s !== 'string') return s;
+    return s.replace(/\d{4}-\d{2}-\d{2}(?:T[\d:.+-]+)?/g, m => {
+      const t = Date.parse(m); if (!Number.isFinite(t)) return m;
+      const wall = new Date(t + shift + 8 * 3600000).toISOString(); // +08:00 的墙上时间
+      return m.includes('T') ? `${wall.slice(0, 10)}T${wall.slice(11, 19)}+08:00` : wall.slice(0, 10);
+    });
+  };
+  const dl = d => d && d.current_note ? { ...d, current: shiftStr(d.current) } : d;
+  return {
+    ...exp,
+    matters: (exp.matters || []).map(m => ({
+      ...m,
+      deadline: dl(m.deadline),
+      upstream: m.upstream ? { ...m.upstream, deadline: dl(m.upstream.deadline) } : m.upstream,
+      downstream: m.downstream ? { ...m.downstream, deadline: dl(m.downstream.deadline) } : m.downstream,
+    })),
+  };
+}
+
 async function main() {
   const snap = R.loadSnapshots();
   if (!snap.files.length) { console.log(JSON.stringify({ ok: false, error: '没找到 Hub 的消息快照（raw-日期.json）。请用 --dir 指定助理目录。' })); process.exit(1); }
@@ -84,7 +108,7 @@ async function main() {
       fs.writeFileSync(path.join(OUT, 'local-only', `${tag}-output.txt`), res.text || res.error, 'utf8');
       const out = F.parseJson(res.text);
       const seen = new Set([...seeds, ...cands.filter(m => !m.real).map(m => m.id)]);
-      const s = out ? F.score(c, out, { safe: true, seen }) : null;
+      const s = out ? F.score({ ...c, expected: shiftExpected(c.expected, shift) }, out, { safe: true, seen }) : null;
       // 召回漏掉的相关消息（模型根本没看到）；模型把真实消息挂到了事项上（误挂）。
       const missedByRecall = caseMsgs.filter(m => m.relevant && !picked.has(m.id)).map(m => m.id);
       const misLinked = out ? arr(out.message_labels).filter(l => mat.realIds.has(l.msg_id) && arr(l.matter).length > 0).length : null;
