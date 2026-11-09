@@ -37,7 +37,15 @@ for (const p of PEOPLE) for (const n of [p.name, p.welink_name, p.email, p.email
 
 // ---------- 提问 ----------
 const ms = s => Date.parse(s);
-const fmt = s => s.replace('T', ' ').slice(0, 16);
+// 统一换算到 UTC+08:00 的墙上时间再渲染，不依赖操作系统时区。
+// 输入可以是带 Z 的 UTC 串、带 +08:00 的串或纯日期；跨日、跨月由 getUTC* 自动进位。
+const pad2 = n => String(n).padStart(2, '0');
+const fmt = s => {
+  // 纯日期（YYYY-MM-DD）按 +08:00 当天 00:00 处理，避免被 Date.parse 当成 UTC 零点。
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? Date.parse(s + 'T00:00:00+08:00') : ms(s);
+  const d = new Date(t + 8 * 3600000);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+};
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const withWeek = s => `${fmt(s)}（周${WEEK[new Date(ms(s) + 8 * 3600000).getUTCDay()]}）`;
 const TYPES = ['seed', 'task_assignment', 'deadline_change', 'extension_request', 'extension_approved', 'requirement', 'question', 'ack',
@@ -75,7 +83,8 @@ function prompt(c, mat = material(c), now = c.eval_time) {
 
 规则：
 0. 只围绕标了★的邮件整理事项。其他邮件和聊天只用来补充这些事项（改截止、补要求、交付、取消等）；和★邮件无关的消息一律标 null，哪怕它本身也是一件任务（例如同一个群里别的工作安排、闲聊、别的话题）。
-   例外：在★邮件事项基础上派生出的新任务（例如群里有人 @当前用户，要求在这件事之后再交一份东西）要单独成为一个事项。
+   补充说明：同一事项的补充、范围扩大或确认（例如同一门考试追加专题、同一批材料补充要求、传闻经确认后生效）并回原事项，作为该事项的最新要求或截止日期变化，不要另立事项。
+   例外：只有独立交付物或独立责任构成派生任务时才单独成为一个事项（例如群里另一个人要求当前用户再交一份与★邮件不同的东西）。
 1. 一封★邮件可能包含多个事项，要拆开。纯通知（没有任何人需要交付任何东西）不生成事项。
    当前用户只在抄送中、但收件人之间有交付要求的★邮件，要生成一个 direction=cc_only 的事项，对方列出要交付的人。
 2. direction 取值：inbound（谁还要交给我）、outbound（我要交给谁）、relay（先从上游收，再交给下游）、cc_only（当前用户只在抄送、只是知会）、self（我自己要完成，没有明确交付对象）。
@@ -86,6 +95,7 @@ function prompt(c, mat = material(c), now = c.eval_time) {
 6. 未经确认的传闻不能当作要求生效。
 7. 人员一律用下面的人员 ID。
 8. 每条消息都要给出 message_labels，无关的 matter 写 null；一条消息属于多个事项时 matter 写数组。★邮件生成了事项时 type 写 seed，没生成事项时 matter 写 null、type 写 irrelevant。只说「收到」「好的」「抓紧」、没有新信息的消息，type 写 ack。type 只能取：${TYPES.join('、')}。
+   例外：材料里 R 开头的真实消息如果 matter 为 null，可以整条省略不列；其余消息（★邮件、用例消息）仍要逐条标注。
 
 人员表：
 ${people}
@@ -117,8 +127,8 @@ function cliArgs() {
   if (supports('--verbose')) a.push('--verbose');
   a.push('--model', MODEL);
   if (supports('--max-turns')) a.push('--max-turns', '2');
-  // 这一步只要模型读材料写 JSON，不需要任何工具；开着工具会让模型尝试调用、耗尽轮次或陷入重复。
-  // Windows 下 spawn 走 shell，空字符串会被吞掉，要显式传一对引号。
+  // 此评测只需要模型读材料写 JSON，不需要任何工具。禁用工具是执行边界，避免模型尝试访问本机文件。
+  // 实测各次运行都没有发生工具调用；对失败起作用的是缩短输出（省略无关真实消息的标签）。
   if (supports('--tools')) a.push('--tools', process.platform === 'win32' ? '""' : '');
   if (EFFORT && supports('--effort')) a.push('--effort', EFFORT);
   return a;

@@ -27,13 +27,14 @@ const arr = v => v == null ? [] : Array.isArray(v) ? v : [v];
 const iso = ms => new Date(ms).toISOString();
 
 // 候选消息 → 给模型的材料。真实消息编成 R1、R2…（省字数，也方便统计误挂）；用例消息保留原编号。
-function buildMaterial(c, shift, seeds, cands) {
+// 用例消息一律用原始时间（不再平移），真实消息的时间已在主流程里映射到用例时间轴。
+function buildMaterial(c, seeds, cands) {
   const ids = new Map(); let n = 0;
   const idOf = m => { if (!m.real) return m.id; if (!ids.has(m.id)) ids.set(m.id, 'R' + (++n)); return ids.get(m.id); };
   const L = ['## 邮件'];
   const caseMails = c.emails.filter(e => seeds.includes(e.msg_id) || cands.some(m => m.id === e.msg_id));
   for (const e of caseMails) {
-    L.push(`[${e.msg_id}] ${seeds.includes(e.msg_id) ? '★用户转发给你的邮件 ' : ''}${F.withWeek(iso(Date.parse(e.sent_at) + shift))}${e.in_reply_to ? `（回复 ${e.in_reply_to}）` : ''}`,
+    L.push(`[${e.msg_id}] ${seeds.includes(e.msg_id) ? '★用户转发给你的邮件 ' : ''}${F.withWeek(e.sent_at)}${e.in_reply_to ? `（回复 ${e.in_reply_to}）` : ''}`,
       `发件人：${e.from}`, `收件人：${e.to.join('；')}`, `抄送：${(e.cc || []).join('；') || '无'}`, `主题：${e.subject}`,
       `附件：${(e.attachments || []).join('、') || '无'}`, `正文：\n${e.body}`, '');
   }
@@ -49,29 +50,10 @@ function buildMaterial(c, shift, seeds, cands) {
   return { text: L.join('\n'), realCount: ids.size, realIds: new Set(ids.values()) };
 }
 
-// 用例消息整体平移了 shift 毫秒。由相对时间（「明天下班前」「周四前」）算出来的截止日期要跟着平移，
-// 否则模型按平移后的发送时间算出的日期会和没平移的标准答案差整整 shift，被误判成错。
-// 标准答案里这类日期都带 current_note（写明按哪条消息的发送时间解析）；写死日期的（11月20日）不平移。
-function shiftExpected(exp, shift) {
-  const shiftStr = s => {
-    if (typeof s !== 'string') return s;
-    return s.replace(/\d{4}-\d{2}-\d{2}(?:T[\d:.+-]+)?/g, m => {
-      const t = Date.parse(m); if (!Number.isFinite(t)) return m;
-      const wall = new Date(t + shift + 8 * 3600000).toISOString(); // +08:00 的墙上时间
-      return m.includes('T') ? `${wall.slice(0, 10)}T${wall.slice(11, 19)}+08:00` : wall.slice(0, 10);
-    });
-  };
-  const dl = d => d && d.current_note ? { ...d, current: shiftStr(d.current) } : d;
-  return {
-    ...exp,
-    matters: (exp.matters || []).map(m => ({
-      ...m,
-      deadline: dl(m.deadline),
-      upstream: m.upstream ? { ...m.upstream, deadline: dl(m.upstream.deadline) } : m.upstream,
-      downstream: m.downstream ? { ...m.downstream, deadline: dl(m.downstream.deadline) } : m.downstream,
-    })),
-  };
-}
+// 合成评测的噪音时间映射：用例消息、eval_time、正文、标准答案全部保持原样；
+// 把真实噪音消息的时间整体反向移动（减 shift），使它们与用例的相对时间位置和原方案一致。
+// 只改内存里的副本，真实快照文件不动。
+function mapNoise(m, shift) { return m.real ? { ...m, at: m.at - shift } : m; }
 
 async function main() {
   const snap = R.loadSnapshots();
@@ -88,27 +70,28 @@ async function main() {
   for (const variant of VARIANTS) {
     if (variant === 'B' && !realGroups.length) continue;
     for (const c of cases) jobs.push(async () => {
-      const until0 = Date.parse(c.eval_time), shift = Math.floor((snap.at - until0) / R.WEEK) * R.WEEK, until = until0 + shift;
-      const caseMsgs = R.injected(c, shift, variant, realGroups);
-      const pool = [...snap.messages.filter(m => m.at <= until), ...caseMsgs];
+      // 用例时间轴保持原样；真实噪音消息整体反向移动 shift，使相对位置与原方案一致。
+      const until = Date.parse(c.eval_time), shift = Math.floor((snap.at - until) / R.WEEK) * R.WEEK;
+      const caseMsgs = R.injected(c, 0, variant, realGroups);
+      const pool = [...snap.messages.filter(m => m.at - shift <= until).map(m => mapNoise(m, shift)), ...caseMsgs];
       const idf = R.idfOf(pool.map(m => m.text));
       const seeds = arr(c.seed_email_id), picked = new Set();
       for (const sid of seeds) {
         const e = c.emails.find(x => x.msg_id === sid);
-        const r = R.recall({ ...e, sent_at: iso(Date.parse(e.sent_at) + shift) }, pool, idf, until, 'anchor');
+        const r = R.recall(e, pool, idf, until, 'anchor');
         for (const id of r.mails) picked.add(id);
         for (const w of r.ranked.slice(0, K)) for (const m of w.seg) picked.add(m.id);
       }
       const cands = pool.filter(m => picked.has(m.id));
-      const mat = buildMaterial(c, shift, seeds, cands);
-      const text = F.prompt(c, mat.text, iso(until));
+      const mat = buildMaterial(c, seeds, cands);
+      const text = F.prompt(c, mat.text, c.eval_time);
       const tag = `${variant}-${c.case_id}`;
       fs.writeFileSync(path.join(OUT, 'local-only', `${tag}-prompt.txt`), text, 'utf8');
       const res = await F.run(text, path.join(OUT, 'ws'));
       fs.writeFileSync(path.join(OUT, 'local-only', `${tag}-output.txt`), res.text || res.error, 'utf8');
       const out = F.parseJson(res.text);
       const seen = new Set([...seeds, ...cands.filter(m => !m.real).map(m => m.id)]);
-      const s = out ? F.score({ ...c, expected: shiftExpected(c.expected, shift) }, out, { safe: true, seen }) : null;
+      const s = out ? F.score(c, out, { safe: true, seen }) : null;
       // 召回漏掉的相关消息（模型根本没看到）；模型把真实消息挂到了事项上（误挂）。
       const missedByRecall = caseMsgs.filter(m => m.relevant && !picked.has(m.id)).map(m => m.id);
       const misLinked = out ? arr(out.message_labels).filter(l => mat.realIds.has(l.msg_id) && arr(l.matter).length > 0).length : null;
@@ -125,7 +108,8 @@ async function main() {
   const rate = v => v.all ? Math.round(v.ok / v.all * 100) + '%' : '-';
   const summary = { at: new Date().toISOString(), model: F.MODEL, cli: F.CLI, K, variants: VARIANTS, realMessages: snap.messages.length, byVariant: {}, perCase: [] };
   const L = ['# 跨渠道跟进 · 端到端评测报告', '', `模型 ${F.MODEL}（${F.CLI}）· 召回：锚点前 ${K} 条 · 真实消息 ${snap.messages.length} 条。报告里没有任何真实消息内容。`, '',
-    'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群。', '「召回漏掉」= 模型根本没看到的相关消息；「误挂真实消息」= 模型把无关的真实消息算进了事项。', ''];
+    'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群。', '「召回漏掉」= 模型根本没看到的相关消息；「误挂真实消息」= 模型把无关的真实消息算进了事项。', '',
+    '时间口径：编造用例的发送时间、评测时间、正文和标准答案全部保持原样；真实噪音消息的时间在内存中整体反向平移（每个用例按其整周差），使噪音与用例的相对位置和原方案一致。真实快照文件未修改，这是合成评测的噪音时间映射。', ''];
   for (const variant of VARIANTS) {
     const xs = results.filter(r => r.variant === variant); if (!xs.length) continue;
     const tot = {};
