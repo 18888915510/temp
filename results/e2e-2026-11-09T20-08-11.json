@@ -1,0 +1,283 @@
+{
+  "at": "2026-11-09T12:17:17.977Z",
+  "model": "deepseek-v4.1-flash-1017",
+  "cli": "codeagent",
+  "K": 20,
+  "variants": [
+    "A",
+    "B"
+  ],
+  "realMessages": 3714,
+  "byVariant": {
+    "A": {
+      "metrics": {
+        "事项数量": {
+          "ok": 6,
+          "all": 7
+        },
+        "消息归属": {
+          "ok": 44,
+          "all": 48
+        },
+        "消息作用": {
+          "ok": 42,
+          "all": 48
+        },
+        "事项识别": {
+          "ok": 10,
+          "all": 10
+        },
+        "方向": {
+          "ok": 10,
+          "all": 10
+        },
+        "截止日期": {
+          "ok": 11,
+          "all": 11
+        },
+        "对方状态": {
+          "ok": 20,
+          "all": 21
+        },
+        "最新要求（出处）": {
+          "ok": 13,
+          "all": 14
+        },
+        "冲突提示": {
+          "ok": 2,
+          "all": 2
+        }
+      },
+      "avgCandidates": 73.1,
+      "avgReal": 67.6,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 73.5,
+      "failed": []
+    },
+    "B": {
+      "metrics": {
+        "事项数量": {
+          "ok": 7,
+          "all": 7
+        },
+        "消息归属": {
+          "ok": 45,
+          "all": 48
+        },
+        "消息作用": {
+          "ok": 44,
+          "all": 48
+        },
+        "事项识别": {
+          "ok": 10,
+          "all": 10
+        },
+        "方向": {
+          "ok": 10,
+          "all": 10
+        },
+        "截止日期": {
+          "ok": 11,
+          "all": 11
+        },
+        "对方状态": {
+          "ok": 20,
+          "all": 21
+        },
+        "最新要求（出处）": {
+          "ok": 14,
+          "all": 14
+        },
+        "冲突提示": {
+          "ok": 2,
+          "all": 2
+        }
+      },
+      "avgCandidates": 84.3,
+      "avgReal": 79.4,
+      "missedByRecall": 3,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 72.8,
+      "failed": []
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "C1",
+      "seconds": 79.1,
+      "candidates": 45,
+      "real": 36,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 4
+    },
+    {
+      "variant": "A",
+      "case": "C2",
+      "seconds": 116.5,
+      "candidates": 62,
+      "real": 56,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "A",
+      "case": "C3",
+      "seconds": 59.5,
+      "candidates": 78,
+      "real": 73,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "A",
+      "case": "C4",
+      "seconds": 53.4,
+      "candidates": 84,
+      "real": 81,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "A",
+      "case": "C5",
+      "seconds": 84.7,
+      "candidates": 57,
+      "real": 52,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "A",
+      "case": "C6",
+      "seconds": 53.6,
+      "candidates": 74,
+      "real": 66,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "A",
+      "case": "C7",
+      "seconds": 67.9,
+      "candidates": 112,
+      "real": 109,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 6
+    },
+    {
+      "variant": "B",
+      "case": "C1",
+      "seconds": 88.4,
+      "candidates": 76,
+      "real": 70,
+      "json": true,
+      "missedByRecall": [
+        "C1-G1-M1"
+      ],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 2
+    },
+    {
+      "variant": "B",
+      "case": "C2",
+      "seconds": 106.2,
+      "candidates": 63,
+      "real": 58,
+      "json": true,
+      "missedByRecall": [
+        "C2-G1-M5"
+      ],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 2
+    },
+    {
+      "variant": "B",
+      "case": "C3",
+      "seconds": 56.4,
+      "candidates": 92,
+      "real": 88,
+      "json": true,
+      "missedByRecall": [
+        "C3-G1-M5"
+      ],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 2
+    },
+    {
+      "variant": "B",
+      "case": "C4",
+      "seconds": 58.7,
+      "candidates": 94,
+      "real": 91,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "B",
+      "case": "C5",
+      "seconds": 82.7,
+      "candidates": 63,
+      "real": 58,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "B",
+      "case": "C6",
+      "seconds": 51.1,
+      "candidates": 81,
+      "real": 73,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "B",
+      "case": "C7",
+      "seconds": 66.3,
+      "candidates": 121,
+      "real": 118,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    }
+  ]
+}
