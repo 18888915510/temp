@@ -1,0 +1,727 @@
+{
+  "_说明": {
+    "用途": "跨渠道跟进任务的模拟测试集。每个用例包含邮件、群聊、私聊原始消息，以及标准答案。",
+    "当前用户": "u_wangli（王丽，HRBP）。所有方向判定都以她为视角。",
+    "身份说明": "邮件中使用邮箱地址（部分带英文显示名），聊天中使用 WeLink 昵称，需要通过 people 表把两者对应起来。",
+    "eval_time": "每个用例的评测时间点，用于判断是否逾期；只有 eval_time 之前的消息可见。",
+    "message_labels": "逐条消息的标准答案：matter 为所属事项 ID（null 表示无关），type 为消息作用。",
+    "type 取值": {
+      "seed": "种子邮件",
+      "task_assignment": "布置任务/产生新义务",
+      "deadline_change": "截止日期变更（已生效）",
+      "extension_request": "延期申请（尚未生效）",
+      "extension_approved": "延期获批（生效）",
+      "requirement": "补充要求",
+      "question": "提问（本身不改变事项）",
+      "ack": "收到/确认，无新信息",
+      "delivery": "交付",
+      "delivery_by_others": "他人之间的交付（当前用户只是知会）",
+      "cancel": "取消（整体或部分）",
+      "meeting": "与事项相关的会议安排，不改变截止日期",
+      "not_applicable_to_user": "与事项相关，但只针对其他人，不影响当前用户",
+      "irrelevant": "无关消息（干扰项）"
+    },
+    "交付状态取值": ["pending", "delivered", "overdue", "cancelled"],
+    "方向取值": {
+      "inbound": "谁还要交给我",
+      "outbound": "我要交给谁",
+      "relay": "中转：先从上游收，再交给下游",
+      "cc_only": "仅知会，不进入主列表",
+      "self": "我自己要完成（无明确交付对象，如考试、填报系统）"
+    },
+    "distribution_lists": "邮件组地址及其成员。群发给邮件组时，需要展开成员，逐人跟踪。",
+    "补充 type": {
+      "nil_delivery": "回复“无/没有”，视为已完成",
+      "unconfirmed_info": "未经确认的传闻，不能直接作为要求生效",
+      "info_confirmed": "对传闻的确认，此时要求才生效"
+    }
+  },
+
+  "people": [
+    {"id": "u_wangli", "name": "王丽", "email": "wangli@corp.example", "welink_name": "王丽", "role": "HRBP（当前用户）"},
+    {"id": "p_zhangwei", "name": "张伟", "email": "zhangwei@corp.example", "welink_name": "张伟", "role": "研发一部主管"},
+    {"id": "p_lina", "name": "李娜", "email": "lina@corp.example", "welink_name": "李娜", "role": "研发二部主管"},
+    {"id": "p_chenming", "name": "陈明", "email": "chenming@corp.example", "welink_name": "陈明", "aliases": ["陈总"], "role": "HR 总监"},
+    {"id": "p_zhaokai", "name": "赵凯", "email": "kevin.zhao@corp.example", "email_display_name": "Kevin Zhao", "welink_name": "赵凯", "role": "研发三部主管"},
+    {"id": "p_liuyang", "name": "刘洋", "email": "liuyang@corp.example", "welink_name": "刘洋", "role": "招聘负责人"},
+    {"id": "p_sunhua", "name": "孙华", "email": "sunhua@corp.example", "welink_name": "孙华", "role": "财务 BP"},
+    {"id": "p_zhouting", "name": "周婷", "email": "zhouting@corp.example", "welink_name": "周婷", "role": "HRBP（另一产线）"},
+    {"id": "p_wuqiang", "name": "吴强", "email": "wuqiang@corp.example", "welink_name": "吴强", "role": "研发四部主管"},
+    {"id": "p_zhengfang", "name": "郑芳", "email": "zhengfang@corp.example", "welink_name": "郑芳", "role": "研发五部主管"},
+    {"id": "p_huanglei", "name": "黄磊", "email": "huanglei@corp.example", "welink_name": "黄磊", "role": "研发六部主管"}
+  ],
+
+  "distribution_lists": [
+    {"address": "rd-managers@corp.example", "display_name": "研发主管", "members": ["p_zhangwei", "p_lina", "p_zhaokai", "p_wuqiang", "p_zhengfang", "p_huanglei"]},
+    {"address": "all@corp.example", "display_name": "全体员工", "members": "全体（成员过多，不展开）"}
+  ],
+
+  "cases": [
+    {
+      "case_id": "C1",
+      "title": "年度培训需求调研（一封邮件拆两件事）",
+      "test_points": [
+        "一封邮件拆成两个事项",
+        "相对时间“明天下班前”按消息发送时间解析",
+        "成员完全相同的干扰群（周会群）要排除",
+        "同群闲聊要排除",
+        "私聊附件交付，只记在发送人名下",
+        "延期申请和延期获批要区分，并挂到正确的事项"
+      ],
+      "seed_email_id": "C1-E1",
+      "eval_time": "2026-11-12T15:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C1-E1",
+          "from": "王丽 <wangli@corp.example>",
+          "to": ["zhangwei@corp.example", "lina@corp.example"],
+          "cc": [],
+          "sent_at": "2026-11-09T10:00:00+08:00",
+          "subject": "【请提交】年度培训需求调研",
+          "body": "张伟、李娜好：\n\n1. 请各部门于11月13日（本周五）前提交年度培训需求表，模板见附件。\n2. 另外，请于11月16日前确认部门内训讲师名单。\n\n谢谢！\n王丽",
+          "attachments": ["培训需求表模板.xlsx"]
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C1-G1",
+          "name": "年度培训需求-研发",
+          "members": ["王丽", "张伟", "李娜"],
+          "messages": [
+            {"msg_id": "C1-G1-M1", "sender": "张伟", "sent_at": "2026-11-09T10:30:00+08:00", "text": "收到"},
+            {"msg_id": "C1-G1-M2", "sender": "王丽", "sent_at": "2026-11-10T09:15:00+08:00", "text": "领导要求提前看，@张伟 @李娜 麻烦明天下班前给我", "mentions": ["张伟", "李娜"]},
+            {"msg_id": "C1-G1-M3", "sender": "李娜", "sent_at": "2026-11-10T09:40:00+08:00", "text": "表格里要不要加一列“预算估算”？"},
+            {"msg_id": "C1-G1-M4", "sender": "王丽", "sent_at": "2026-11-10T09:42:00+08:00", "text": "要加，另外每个部门最多报5门课"},
+            {"msg_id": "C1-G1-M5", "sender": "张伟", "sent_at": "2026-11-10T12:05:00+08:00", "text": "今晚老地方聚餐哈"},
+            {"msg_id": "C1-G1-M6", "sender": "李娜", "sent_at": "2026-11-11T16:20:00+08:00", "text": "讲师名单可能要晚两天"},
+            {"msg_id": "C1-G1-M7", "sender": "王丽", "sent_at": "2026-11-12T10:00:00+08:00", "text": "讲师名单可以延到18号"}
+          ]
+        },
+        {
+          "group_id": "C1-G2",
+          "name": "部门周会",
+          "members": ["王丽", "张伟", "李娜"],
+          "messages": [
+            {"msg_id": "C1-G2-M1", "sender": "王丽", "sent_at": "2026-11-10T14:00:00+08:00", "text": "周会材料周五前发我"}
+          ]
+        }
+      ],
+      "dms": [
+        {
+          "dm_id": "C1-DM1",
+          "peer": "张伟",
+          "messages": [
+            {"msg_id": "C1-DM1-M1", "sender": "张伟", "sent_at": "2026-11-11T17:30:00+08:00", "text": "培训需求表发你了", "attachments": ["研发一部培训需求.xlsx"]}
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "年度培训需求表",
+            "direction": "inbound",
+            "deliverable": "年度培训需求表（按附件模板）",
+            "counterparties": [
+              {"person": "p_zhangwei", "status": "delivered", "evidence": ["C1-DM1-M1"]},
+              {"person": "p_lina", "status": "overdue", "evidence": []}
+            ],
+            "deadline": {
+              "current": "2026-11-11T18:00:00+08:00",
+              "current_note": "“明天下班前”按 11/10 发送时间解析为 11/11 下班前",
+              "history": [
+                {"value": "2026-11-13", "source": "C1-E1"},
+                {"value": "2026-11-11T18:00:00+08:00", "source": "C1-G1-M2"}
+              ]
+            },
+            "requirements": [
+              {"text": "按附件模板填写", "source": "C1-E1"},
+              {"text": "新增“预算估算”列", "source": "C1-G1-M4"},
+              {"text": "每个部门最多报 5 门课", "source": "C1-G1-M4"}
+            ],
+            "conflicts": [
+              {"description": "邮件截止 11/13，群内改为 11/11", "adopted": "C1-G1-M2", "reason": "时间更晚，且由发起人本人提出"}
+            ]
+          },
+          {
+            "matter_id": "M2",
+            "title": "部门内训讲师名单确认",
+            "direction": "inbound",
+            "deliverable": "部门内训讲师名单",
+            "counterparties": [
+              {"person": "p_zhangwei", "status": "pending", "evidence": []},
+              {"person": "p_lina", "status": "pending", "evidence": []}
+            ],
+            "deadline": {
+              "current": "2026-11-18",
+              "history": [
+                {"value": "2026-11-16", "source": "C1-E1"},
+                {"value": "延期申请（未生效）", "source": "C1-G1-M6"},
+                {"value": "2026-11-18", "source": "C1-G1-M7"}
+              ]
+            },
+            "requirements": [],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C1-E1", "matter": ["M1", "M2"], "type": "seed"},
+          {"msg_id": "C1-G1-M1", "matter": ["M1", "M2"], "type": "ack"},
+          {"msg_id": "C1-G1-M2", "matter": "M1", "type": "deadline_change"},
+          {"msg_id": "C1-G1-M3", "matter": "M1", "type": "question"},
+          {"msg_id": "C1-G1-M4", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C1-G1-M5", "matter": null, "type": "irrelevant"},
+          {"msg_id": "C1-G1-M6", "matter": "M2", "type": "extension_request"},
+          {"msg_id": "C1-G1-M7", "matter": "M2", "type": "extension_approved"},
+          {"msg_id": "C1-G2-M1", "matter": null, "type": "irrelevant"},
+          {"msg_id": "C1-DM1-M1", "matter": "M1", "type": "delivery"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C2",
+      "title": "Q4 绩效校准材料（中转型 + 逾期）",
+      "test_points": [
+        "中转型事项：从部门收材料，汇总后交给总监",
+        "下游截止日期提前，倒逼上游截止日期提前",
+        "别名识别：“陈总”即陈明",
+        "通过邮件回复（同一线程）完成交付",
+        "到评测时间仍未交付的判定为逾期",
+        "“周三”按 11/3（周二）发送时间解析为 11/4"
+      ],
+      "seed_email_id": "C2-E1",
+      "eval_time": "2026-11-05T09:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C2-E1",
+          "from": "王丽 <wangli@corp.example>",
+          "to": ["zhangwei@corp.example", "lina@corp.example"],
+          "cc": ["chenming@corp.example"],
+          "sent_at": "2026-11-02T10:00:00+08:00",
+          "subject": "【请提交】Q4绩效校准材料",
+          "body": "各位好：\n\n请于11月6日（本周五）前提交本部门Q4绩效校准表（模板见附件），我汇总后提交陈总。\n\n王丽",
+          "attachments": ["Q4绩效校准表模板.xlsx"]
+        },
+        {
+          "msg_id": "C2-E2",
+          "in_reply_to": "C2-E1",
+          "from": "李娜 <lina@corp.example>",
+          "to": ["wangli@corp.example"],
+          "cc": [],
+          "sent_at": "2026-11-04T17:45:00+08:00",
+          "subject": "RE: 【请提交】Q4绩效校准材料",
+          "body": "王丽，研发二部的校准表见附件，A档控制在18%。",
+          "attachments": ["研发二部Q4校准.xlsx"]
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C2-G1",
+          "name": "Q4绩效校准-研发",
+          "members": ["王丽", "张伟", "李娜", "陈明"],
+          "messages": [
+            {"msg_id": "C2-G1-M1", "sender": "陈明", "sent_at": "2026-11-03T14:20:00+08:00", "text": "校准会提前到下周一上午，材料我周六要看"},
+            {"msg_id": "C2-G1-M2", "sender": "王丽", "sent_at": "2026-11-03T14:35:00+08:00", "text": "收到。陈总那边要提前看，@张伟 @李娜 麻烦周三前给我", "mentions": ["张伟", "李娜"]},
+            {"msg_id": "C2-G1-M3", "sender": "李娜", "sent_at": "2026-11-03T15:10:00+08:00", "text": "收到。A档比例按多少控制？"},
+            {"msg_id": "C2-G1-M4", "sender": "王丽", "sent_at": "2026-11-03T15:12:00+08:00", "text": "A档不超过20%"},
+            {"msg_id": "C2-G1-M5", "sender": "李娜", "sent_at": "2026-11-04T17:50:00+08:00", "text": "研发二部的已经发邮件了"}
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "Q4 绩效校准材料",
+            "direction": "relay",
+            "deliverable": "Q4 绩效校准表（上游各部门）→ 汇总材料（下游陈明）",
+            "upstream": {
+              "counterparties": [
+                {"person": "p_zhangwei", "status": "overdue", "evidence": []},
+                {"person": "p_lina", "status": "delivered", "evidence": ["C2-E2", "C2-G1-M5"]}
+              ],
+              "deadline": {
+                "current": "2026-11-04",
+                "history": [
+                  {"value": "2026-11-06", "source": "C2-E1"},
+                  {"value": "2026-11-04", "source": "C2-G1-M2"}
+                ]
+              }
+            },
+            "downstream": {
+              "counterparties": [
+                {"person": "p_chenming", "status": "pending", "evidence": []}
+              ],
+              "deadline": {
+                "current": "2026-11-07",
+                "history": [
+                  {"value": "2026-11-07", "source": "C2-G1-M1"}
+                ]
+              }
+            },
+            "requirements": [
+              {"text": "按附件模板填写", "source": "C2-E1"},
+              {"text": "A 档比例不超过 20%", "source": "C2-G1-M4"}
+            ],
+            "conflicts": [
+              {"description": "邮件截止 11/6，群内改为 11/4", "adopted": "C2-G1-M2", "reason": "时间更晚，且由发起人本人提出（受下游提前影响）"}
+            ]
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C2-E1", "matter": "M1", "type": "seed"},
+          {"msg_id": "C2-E2", "matter": "M1", "type": "delivery"},
+          {"msg_id": "C2-G1-M1", "matter": "M1", "type": "deadline_change"},
+          {"msg_id": "C2-G1-M2", "matter": "M1", "type": "deadline_change"},
+          {"msg_id": "C2-G1-M3", "matter": "M1", "type": "question"},
+          {"msg_id": "C2-G1-M4", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C2-G1-M5", "matter": "M1", "type": "delivery"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C3",
+      "title": "2027 人力编制预算填报（HR 是交付方）",
+      "test_points": [
+        "当前用户在 To 中，方向为“我要交给谁”",
+        "群内补充要求对所有人生效",
+        "@当前用户的专属要求",
+        "只针对其他人的截止放宽，不能套到当前用户身上",
+        "“老时间”指会议，不是截止日期"
+      ],
+      "seed_email_id": "C3-E1",
+      "eval_time": "2026-11-13T15:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C3-E1",
+          "from": "孙华 <sunhua@corp.example>",
+          "to": ["wangli@corp.example", "zhouting@corp.example"],
+          "cc": ["chenming@corp.example"],
+          "sent_at": "2026-11-09T15:00:00+08:00",
+          "subject": "2027年人力编制预算填报",
+          "body": "各位HRBP好：\n\n请于11月20日前提交负责产线的2027年编制预算表，需包含人数和职级分布，格式按附件。\n\n孙华",
+          "attachments": ["2027编制预算表.xlsx"]
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C3-G1",
+          "name": "2027预算编制沟通群",
+          "members": ["孙华", "王丽", "周婷", "陈明"],
+          "messages": [
+            {"msg_id": "C3-G1-M1", "sender": "孙华", "sent_at": "2026-11-10T10:00:00+08:00", "text": "补充一下，编制表需要拆到二级部门"},
+            {"msg_id": "C3-G1-M2", "sender": "周婷", "sent_at": "2026-11-10T10:05:00+08:00", "text": "收到"},
+            {"msg_id": "C3-G1-M3", "sender": "孙华", "sent_at": "2026-11-12T09:00:00+08:00", "text": "@王丽 你那边外包人员也单独列一下", "mentions": ["王丽"]},
+            {"msg_id": "C3-G1-M4", "sender": "孙华", "sent_at": "2026-11-12T09:30:00+08:00", "text": "@周婷 你们产线调整比较大，截止可以放宽到25号", "mentions": ["周婷"]},
+            {"msg_id": "C3-G1-M5", "sender": "孙华", "sent_at": "2026-11-13T11:00:00+08:00", "text": "周五下午老时间拉个会，对一下各家进度"}
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "2027 人力编制预算表",
+            "direction": "outbound",
+            "deliverable": "负责产线的 2027 编制预算表",
+            "counterparties": [
+              {"person": "p_sunhua", "status": "pending", "evidence": []}
+            ],
+            "deadline": {
+              "current": "2026-11-20",
+              "history": [
+                {"value": "2026-11-20", "source": "C3-E1"}
+              ],
+              "note": "C3-G1-M4 的放宽只针对周婷，王丽的截止日期不变"
+            },
+            "requirements": [
+              {"text": "包含人数和职级分布，格式按附件", "source": "C3-E1"},
+              {"text": "拆到二级部门", "source": "C3-G1-M1"},
+              {"text": "外包人员单独列出（仅针对王丽）", "source": "C3-G1-M3"}
+            ],
+            "related_events": [
+              {"text": "周五（11/13）下午进度对齐会", "source": "C3-G1-M5"}
+            ],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C3-E1", "matter": "M1", "type": "seed"},
+          {"msg_id": "C3-G1-M1", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C3-G1-M2", "matter": "M1", "type": "ack"},
+          {"msg_id": "C3-G1-M3", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C3-G1-M4", "matter": "M1", "type": "not_applicable_to_user"},
+          {"msg_id": "C3-G1-M5", "matter": "M1", "type": "meeting"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C4",
+      "title": "秋招 offer 确认（抄送知会 → 群里冒出新任务）",
+      "test_points": [
+        "当前用户只在 CC 中，邮件事项为“仅知会”，不进入主列表",
+        "群里 @当前用户，派生出一个新的“我要交给谁”事项",
+        "新事项与知会事项存在依赖关系",
+        "他人之间的交付只更新知会事项的状态"
+      ],
+      "seed_email_id": "C4-E1",
+      "eval_time": "2026-11-11T12:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C4-E1",
+          "from": "刘洋 <liuyang@corp.example>",
+          "to": ["zhangwei@corp.example", "lina@corp.example"],
+          "cc": ["wangli@corp.example"],
+          "sent_at": "2026-11-09T16:00:00+08:00",
+          "subject": "秋招offer发放进度确认",
+          "body": "张伟、李娜好：\n\n请于11月12日前确认本部门秋招offer接收情况，直接回复本邮件即可。\n\n刘洋",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C4-G1",
+          "name": "秋招协同群",
+          "members": ["刘洋", "王丽", "张伟", "李娜"],
+          "messages": [
+            {"msg_id": "C4-G1-M1", "sender": "刘洋", "sent_at": "2026-11-10T11:00:00+08:00", "text": "@王丽 offer确认之后，麻烦你周四前把入职报到安排表发我", "mentions": ["王丽"]},
+            {"msg_id": "C4-G1-M2", "sender": "王丽", "sent_at": "2026-11-10T11:05:00+08:00", "text": "好的"},
+            {"msg_id": "C4-G1-M3", "sender": "张伟", "sent_at": "2026-11-11T09:00:00+08:00", "text": "研发一部的offer都确认了，邮件已回复"}
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "秋招 offer 接收情况确认",
+            "direction": "cc_only",
+            "show_in_main_list": false,
+            "deliverable": "各部门 offer 接收情况（交给刘洋）",
+            "counterparties": [
+              {"person": "p_zhangwei", "status": "delivered", "evidence": ["C4-G1-M3"], "to": "p_liuyang"},
+              {"person": "p_lina", "status": "pending", "evidence": [], "to": "p_liuyang"}
+            ],
+            "deadline": {"current": "2026-11-12", "history": [{"value": "2026-11-12", "source": "C4-E1"}]},
+            "requirements": [],
+            "conflicts": []
+          },
+          {
+            "matter_id": "M2",
+            "title": "入职报到安排表",
+            "direction": "outbound",
+            "show_in_main_list": true,
+            "deliverable": "入职报到安排表",
+            "counterparties": [
+              {"person": "p_liuyang", "status": "pending", "evidence": []}
+            ],
+            "deadline": {
+              "current": "2026-11-12",
+              "current_note": "“周四前”按 11/10（周二）发送时间解析",
+              "history": [{"value": "2026-11-12", "source": "C4-G1-M1"}]
+            },
+            "depends_on": "M1",
+            "requirements": [],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C4-E1", "matter": "M1", "type": "seed"},
+          {"msg_id": "C4-G1-M1", "matter": "M2", "type": "task_assignment"},
+          {"msg_id": "C4-G1-M2", "matter": "M2", "type": "ack"},
+          {"msg_id": "C4-G1-M3", "matter": "M1", "type": "delivery_by_others"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C5",
+      "title": "11 月新员工入职（相似事项 + 身份别名 + 部分取消）",
+      "test_points": [
+        "同一个群里两个名称相近的事项（都和“入职”有关）要区分开",
+        "一条消息同时影响两个事项",
+        "部分取消：只取消某一个人负责的部分",
+        "身份对应：邮件中的 Kevin Zhao 即 WeLink 中的赵凯",
+        "延期申请后获批，截止日期更新"
+      ],
+      "seed_email_id": "C5-E1",
+      "eval_time": "2026-11-10T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C5-E1",
+          "from": "王丽 <wangli@corp.example>",
+          "to": ["Kevin Zhao <kevin.zhao@corp.example>", "zhangwei@corp.example"],
+          "cc": [],
+          "sent_at": "2026-11-02T09:30:00+08:00",
+          "subject": "11月新员工入职安排",
+          "body": "Kevin、张伟好：\n\n11月16日两个部门共有5名新员工入职，请：\n1. 各部门导师于11月11日前提交入职培训计划；\n2. 入职体检预约结果于11月9日前反馈给我。\n\n王丽",
+          "attachments": ["入职培训计划模板.docx"]
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C5-G1",
+          "name": "11月新员工入职",
+          "members": ["王丽", "赵凯", "张伟"],
+          "messages": [
+            {"msg_id": "C5-G1-M1", "sender": "赵凯", "sent_at": "2026-11-04T10:00:00+08:00", "text": "体检那边医院说下周排不开，能不能延到13号？"},
+            {"msg_id": "C5-G1-M2", "sender": "王丽", "sent_at": "2026-11-04T10:20:00+08:00", "text": "体检可以，13号"},
+            {"msg_id": "C5-G1-M3", "sender": "王丽", "sent_at": "2026-11-05T14:00:00+08:00", "text": "培训计划里加上信息安全培训模块"},
+            {"msg_id": "C5-G1-M4", "sender": "张伟", "sent_at": "2026-11-06T09:00:00+08:00", "text": "我们部门那个新人不来了，培训计划和体检都不用弄了"}
+          ]
+        }
+      ],
+      "dms": [
+        {
+          "dm_id": "C5-DM1",
+          "peer": "赵凯",
+          "messages": [
+            {"msg_id": "C5-DM1-M1", "sender": "赵凯", "sent_at": "2026-11-06T16:00:00+08:00", "text": "培训计划发你", "attachments": ["研发三部入职培训计划.docx"]}
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "新员工入职培训计划",
+            "direction": "inbound",
+            "deliverable": "入职培训计划（按附件模板）",
+            "counterparties": [
+              {"person": "p_zhaokai", "status": "delivered", "evidence": ["C5-DM1-M1"]},
+              {"person": "p_zhangwei", "status": "cancelled", "evidence": ["C5-G1-M4"]}
+            ],
+            "deadline": {"current": "2026-11-11", "history": [{"value": "2026-11-11", "source": "C5-E1"}]},
+            "requirements": [
+              {"text": "按附件模板填写", "source": "C5-E1"},
+              {"text": "加入信息安全培训模块", "source": "C5-G1-M3"}
+            ],
+            "conflicts": []
+          },
+          {
+            "matter_id": "M2",
+            "title": "新员工入职体检预约结果",
+            "direction": "inbound",
+            "deliverable": "入职体检预约结果",
+            "counterparties": [
+              {"person": "p_zhaokai", "status": "pending", "evidence": []},
+              {"person": "p_zhangwei", "status": "cancelled", "evidence": ["C5-G1-M4"]}
+            ],
+            "deadline": {
+              "current": "2026-11-13",
+              "history": [
+                {"value": "2026-11-09", "source": "C5-E1"},
+                {"value": "延期申请（未生效）", "source": "C5-G1-M1"},
+                {"value": "2026-11-13", "source": "C5-G1-M2"}
+              ],
+              "note": "评测时间 11/10 已过原截止 11/9，但已获批延期，赵凯不应判为逾期"
+            },
+            "requirements": [],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C5-E1", "matter": ["M1", "M2"], "type": "seed"},
+          {"msg_id": "C5-G1-M1", "matter": "M2", "type": "extension_request"},
+          {"msg_id": "C5-G1-M2", "matter": "M2", "type": "extension_approved"},
+          {"msg_id": "C5-G1-M3", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C5-G1-M4", "matter": ["M1", "M2"], "type": "cancel"},
+          {"msg_id": "C5-DM1-M1", "matter": "M1", "type": "delivery"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C6",
+      "title": "群发邮件组收集名单（HR 发给很多人）",
+      "test_points": [
+        "收件人是邮件组，需要展开成 6 个人逐一跟踪",
+        "输出整体进度（如 5/6 已交）",
+        "回复“无/没有”也算完成",
+        "“同上”需要结合上一条消息才能理解",
+        "群很大、成员重合度高，靠成员匹配区分不了，必须看内容",
+        "同一个群里另一位主管布置的其他任务要排除",
+        "交付渠道分散：邮件回复、群消息、私聊各有"
+      ],
+      "seed_email_id": "C6-E1",
+      "eval_time": "2026-11-14T09:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C6-E1",
+          "from": "王丽 <wangli@corp.example>",
+          "to": ["研发主管 <rd-managers@corp.example>"],
+          "cc": [],
+          "sent_at": "2026-11-09T09:00:00+08:00",
+          "subject": "【请提交】Q4员工关怀访谈名单",
+          "body": "各位主管好：\n\n请于11月13日前提交本部门需要重点关怀的员工名单（如没有，回复“无”即可）。\n\n王丽",
+          "attachments": ["关怀名单模板.xlsx"]
+        },
+        {
+          "msg_id": "C6-E2",
+          "in_reply_to": "C6-E1",
+          "from": "李娜 <lina@corp.example>",
+          "to": ["wangli@corp.example"],
+          "cc": [],
+          "sent_at": "2026-11-10T15:00:00+08:00",
+          "subject": "RE: 【请提交】Q4员工关怀访谈名单",
+          "body": "见附件。",
+          "attachments": ["研发二部关怀名单.xlsx"]
+        },
+        {
+          "msg_id": "C6-E3",
+          "in_reply_to": "C6-E1",
+          "from": "吴强 <wuqiang@corp.example>",
+          "to": ["wangli@corp.example"],
+          "cc": [],
+          "sent_at": "2026-11-11T09:20:00+08:00",
+          "subject": "RE: 【请提交】Q4员工关怀访谈名单",
+          "body": "研发四部无。",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C6-G1",
+          "name": "研发管理团队",
+          "members": ["王丽", "张伟", "李娜", "赵凯", "吴强", "郑芳", "黄磊", "（另有 15 名其他成员）"],
+          "messages": [
+            {"msg_id": "C6-G1-M1", "sender": "王丽", "sent_at": "2026-11-10T09:00:00+08:00", "text": "关怀名单的事大家抓紧，有问题群里问"},
+            {"msg_id": "C6-G1-M2", "sender": "郑芳", "sent_at": "2026-11-10T09:30:00+08:00", "text": "试用期员工要算吗？"},
+            {"msg_id": "C6-G1-M3", "sender": "王丽", "sent_at": "2026-11-10T09:32:00+08:00", "text": "试用期的也算"},
+            {"msg_id": "C6-G1-M4", "sender": "赵凯", "sent_at": "2026-11-11T10:00:00+08:00", "text": "研发三部没有需要关怀的"},
+            {"msg_id": "C6-G1-M5", "sender": "黄磊", "sent_at": "2026-11-11T10:02:00+08:00", "text": "同上"},
+            {"msg_id": "C6-G1-M6", "sender": "张伟", "sent_at": "2026-11-12T11:00:00+08:00", "text": "下周架构评审的材料大家周五前发我"}
+          ]
+        }
+      ],
+      "dms": [
+        {
+          "dm_id": "C6-DM1",
+          "peer": "郑芳",
+          "messages": [
+            {"msg_id": "C6-DM1-M1", "sender": "郑芳", "sent_at": "2026-11-13T16:00:00+08:00", "text": "名单发你", "attachments": ["研发五部关怀名单.xlsx"]}
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "Q4 员工关怀访谈名单",
+            "direction": "inbound",
+            "deliverable": "本部门重点关怀员工名单（没有则回复“无”）",
+            "progress": "5/6 已完成，1 人逾期",
+            "counterparties": [
+              {"person": "p_zhangwei", "status": "overdue", "evidence": []},
+              {"person": "p_lina", "status": "delivered", "evidence": ["C6-E2"]},
+              {"person": "p_zhaokai", "status": "delivered", "evidence": ["C6-G1-M4"], "note": "回复没有"},
+              {"person": "p_wuqiang", "status": "delivered", "evidence": ["C6-E3"], "note": "回复无"},
+              {"person": "p_zhengfang", "status": "delivered", "evidence": ["C6-DM1-M1"]},
+              {"person": "p_huanglei", "status": "delivered", "evidence": ["C6-G1-M5"], "note": "“同上”指承接赵凯，表示没有"}
+            ],
+            "deadline": {"current": "2026-11-13", "history": [{"value": "2026-11-13", "source": "C6-E1"}]},
+            "requirements": [
+              {"text": "按附件模板填写", "source": "C6-E1"},
+              {"text": "试用期员工也要计入", "source": "C6-G1-M3"}
+            ],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {"msg_id": "C6-E1", "matter": "M1", "type": "seed"},
+          {"msg_id": "C6-E2", "matter": "M1", "type": "delivery"},
+          {"msg_id": "C6-E3", "matter": "M1", "type": "nil_delivery"},
+          {"msg_id": "C6-G1-M1", "matter": "M1", "type": "ack"},
+          {"msg_id": "C6-G1-M2", "matter": "M1", "type": "question"},
+          {"msg_id": "C6-G1-M3", "matter": "M1", "type": "requirement"},
+          {"msg_id": "C6-G1-M4", "matter": "M1", "type": "nil_delivery"},
+          {"msg_id": "C6-G1-M5", "matter": "M1", "type": "nil_delivery"},
+          {"msg_id": "C6-G1-M6", "matter": null, "type": "irrelevant"},
+          {"msg_id": "C6-DM1-M1", "matter": "M1", "type": "delivery"}
+        ]
+      }
+    },
+
+    {
+      "case_id": "C7",
+      "title": "全员群发通知（HR 只是众多收件人之一）",
+      "test_points": [
+        "纯通知类群发（放假通知）不应生成事项",
+        "需要本人行动的群发（全员考试）应生成“我自己要完成”事项",
+        "群里的传闻不能直接当成要求，确认后才生效",
+        "话题相近但与当前用户无行动关系的消息要排除"
+      ],
+      "seed_email_id": ["C7-E1", "C7-E2"],
+      "eval_time": "2026-11-12T09:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "C7-E1",
+          "from": "行政部 <admin@corp.example>",
+          "to": ["全体员工 <all@corp.example>"],
+          "cc": [],
+          "sent_at": "2026-11-09T11:00:00+08:00",
+          "subject": "关于2027年元旦放假安排的通知",
+          "body": "全体员工：\n\n2027年元旦放假时间为1月1日至1月3日，共3天。请各部门提前做好工作安排。\n\n行政部",
+          "attachments": []
+        },
+        {
+          "msg_id": "C7-E2",
+          "from": "信息安全部 <infosec@corp.example>",
+          "to": ["全体员工 <all@corp.example>"],
+          "cc": [],
+          "sent_at": "2026-11-09T14:00:00+08:00",
+          "subject": "【必修】2026年度信息安全考试",
+          "body": "全体员工：\n\n请于11月20日前登录学习平台完成2026年度信息安全考试，60分及格，未通过者需补考。\n\n信息安全部",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "C7-G1",
+          "name": "HRBP团队",
+          "members": ["王丽", "周婷", "陈明"],
+          "messages": [
+            {"msg_id": "C7-G1-M1", "sender": "周婷", "sent_at": "2026-11-10T10:00:00+08:00", "text": "听说今年安全考试HR要额外加考一门“员工隐私保护”专题？"},
+            {"msg_id": "C7-G1-M2", "sender": "王丽", "sent_at": "2026-11-10T15:00:00+08:00", "text": "问了信息安全部，确实要加考，也是20号前"},
+            {"msg_id": "C7-G1-M3", "sender": "周婷", "sent_at": "2026-11-11T09:00:00+08:00", "text": "元旦值班表今年谁来排？"}
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "2026 年度信息安全考试",
+            "direction": "self",
+            "deliverable": "完成考试（60 分及格）",
+            "counterparties": [],
+            "status": "pending",
+            "deadline": {"current": "2026-11-20", "history": [{"value": "2026-11-20", "source": "C7-E2"}]},
+            "requirements": [
+              {"text": "完成年度信息安全考试，60 分及格", "source": "C7-E2"},
+              {"text": "加考“员工隐私保护”专题，11/20 前完成", "source": "C7-G1-M2", "note": "M1 为传闻，M2 确认后才生效"}
+            ],
+            "conflicts": []
+          }
+        ],
+        "no_matter_emails": [
+          {"msg_id": "C7-E1", "reason": "纯通知，无需当前用户行动"}
+        ],
+        "message_labels": [
+          {"msg_id": "C7-E1", "matter": null, "type": "irrelevant"},
+          {"msg_id": "C7-E2", "matter": "M1", "type": "seed"},
+          {"msg_id": "C7-G1-M1", "matter": "M1", "type": "unconfirmed_info"},
+          {"msg_id": "C7-G1-M2", "matter": "M1", "type": "info_confirmed"},
+          {"msg_id": "C7-G1-M3", "matter": null, "type": "irrelevant"}
+        ]
+      }
+    }
+  ]
+}
