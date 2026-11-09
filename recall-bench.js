@@ -23,6 +23,9 @@ const STAMP = new Date(Date.now() + 8 * 3600000).toISOString().replace(/[:.]/g, 
 const OUT = path.resolve(opt('out', path.join(__dirname, 'recall-' + STAMP)));
 const KS = String(opt('k', '3,5,10,20')).split(',').map(Number).filter(n => n > 0);
 const GAP = Number(opt('gap-minutes', 60)) * 60000; // 同一会话里，间隔超过这么久就切成新的一段
+// 上下文：回复和补充多在锚点之后，所以前面少带、后面多带。
+const CTX_BEFORE = Number(opt('ctx-before', 2)), CTX_AFTER = Number(opt('ctx-after', 6)), CTX_BEFORE_MIN = Number(opt('ctx-before-minutes', 15)) * 60000, CTX_AFTER_MIN = Number(opt('ctx-after-minutes', 60)) * 60000, PERSON_ONLY = Number(opt('person-only', 0.8)), AT_ME = Number(opt('at-me', 3));
+const MODES = String(opt('modes', 'segment,anchor')).split(',');
 const NAME_CAP = Number(opt('name-cap', 6)), MIN_HIT = Number(opt('min-hit', 2)), FLOOR = Number(opt('floor', 0.4));
 const LOOKBACK = Number(opt('lookback-days', 3)) * 86400000; // 种子邮件发出前多少天的消息也算候选
 const log = (...a) => console.error('[recall]', ...a);
@@ -119,7 +122,7 @@ function injected(c, shift, variant, realGroups) {
 //    会话名分：群名 / 私聊对象名和种子邮件共有的词；私聊对象是邮件参与人再加分。段内容没命中时只给三成。
 //    发言人分：段里有邮件参与人发言或被 @，且这段本身有内容命中时加分（避免参与人闲聊被拉进来）。
 const normSubject = s => String(s || '').replace(/^\s*((re|fw|fwd|回复|转发)\s*[:：]\s*)+/i, '').trim();
-function recall(seed, pool, idf, until) {
+function recall(seed, pool, idf, until, mode = 'segment') {
   const from = Date.parse(seed.sent_at) - LOOKBACK;
   const inWin = pool.filter(m => m.at >= from && m.at <= until);
   const seedText = `${seed.subject} ${seed.subject} ${seed.body} ${(seed.attachments || []).join(' ')}`;
@@ -131,6 +134,7 @@ function recall(seed, pool, idf, until) {
 
   const byConv = new Map();
   for (const m of inWin.filter(m => !m.mail)) { if (!byConv.has(m.conv)) byConv.set(m.conv, []); byConv.get(m.conv).push(m); }
+  if (mode === 'anchor') return { mails: picked, ranked: anchors(byConv, overlap, people), windowSize: inWin.filter(m => m.real).length };
   const segs = [];
   for (const list of byConv.values()) {
     list.sort((a, b) => a.at - b.at);
@@ -159,6 +163,36 @@ function recall(seed, pool, idf, until) {
   return { mails: picked, ranked, windowSize: inWin.filter(m => m.real).length };
 }
 
+// 锚点找法（2026-11-09 真实数据后新增）：活跃大群里消息很密，按间隔切出的段很长，一段能带进几十条无关消息，
+// 而且长段里总有几个词碰巧重合，分数虚高。改成按单条消息打分，取分数最高的 K 条做锚点，
+// 每个锚点带上同一会话里前 CTX_BEFORE 条、后 CTX_AFTER 条（各有时间上限）作为上下文（「收到」「同上」、提问后的回答靠这个带进来）。
+function anchors(byConv, overlap, people) {
+  const all = [];
+  for (const list of byConv.values()) {
+    list.sort((a, b) => a.at - b.at);
+    const name0 = Math.min(NAME_CAP, overlap(list[0].convName || '')) + (!list[0].group && people.has(list[0].convName) ? 3 : 0);
+    list.forEach((m, i) => {
+      const content = overlap(m.text), hit = content >= MIN_HIT;
+      const talk = people.has(m.sender) || (m.mentions || []).some(x => people.has(x));
+      // 邮件参与人在群里 @我：很可能就是在说这件事（「@你 那边外包也单独列一下」这种和邮件没有共同词的补充要求）。
+      const atMeBy = m.atMe && people.has(m.sender) ? AT_ME : 0;
+      all.push({ m, i, list, content, hit, name: name0, person: (talk ? (hit ? 2 : PERSON_ONLY) : 0) + atMeBy });
+    });
+  }
+  const hitConvs = new Set(all.filter(x => x.hit).map(x => x.m.conv));
+  for (const x of all) x.score = x.content + (x.hit || hitConvs.has(x.m.conv) ? x.name : x.name * 0.3) + x.person;
+  all.sort((a, b) => b.score - a.score);
+  const covered = new Set(), out = [];
+  for (const x of all) {
+    if (x.score <= 0) break;
+    if (covered.has(x.m.id)) continue; // 已经在前面某个锚点的上下文里
+    const win = x.list.filter((m, j) => (j <= x.i && x.i - j <= CTX_BEFORE && x.m.at - m.at <= CTX_BEFORE_MIN) || (j > x.i && j - x.i <= CTX_AFTER && m.at - x.m.at <= CTX_AFTER_MIN));
+    for (const m of win) covered.add(m.id);
+    out.push({ seg: win, score: x.score });
+  }
+  return out;
+}
+
 // ---------- 主流程 ----------
 function main() {
   const snap = loadSnapshots();
@@ -184,7 +218,8 @@ function main() {
       for (const seedId of arr(c.seed_email_id)) {
         const seed0 = c.emails.find(e => e.msg_id === seedId);
         const seed = { ...seed0, sent_at: new Date(Date.parse(seed0.sent_at) + shift).toISOString() };
-        const r = recall(seed, pool, idf, until);
+        for (const mode of MODES) {
+        const r = recall(seed, pool, idf, until, mode);
         // 这个种子要找的：标准答案里属于本用例事项的消息（种子本身除外）。C7 两封种子共用一组答案，按种子分开时只算一次。
         const targets = caseMsgs.filter(m => m.relevant);
         const keyTargets = targets.filter(m => KEY_TYPES.has(m.type));
@@ -195,46 +230,52 @@ function main() {
           const got = targets.filter(m => ids.has(m.id)), gotKey = keyTargets.filter(m => ids.has(m.id));
           const realPicked = [...ids].filter(id => !caseMsgs.some(m => m.id === id)).length;
           const distract = caseMsgs.filter(m => !m.relevant && ids.has(m.id)).length;
-          rows.push({ variant, case: c.case_id, seed: seedId, K, targets: targets.length, recall: targets.length ? +(got.length / targets.length).toFixed(2) : 1,
+          rows.push({ mode, variant, case: c.case_id, seed: seedId, K, targets: targets.length, recall: targets.length ? +(got.length / targets.length).toFixed(2) : 1,
             keyTargets: keyTargets.length, keyRecall: keyTargets.length ? +(gotKey.length / keyTargets.length).toFixed(2) : 1,
             candidates: ids.size, realNoise: realPicked, caseDistractors: distract, windowReal: r.windowSize,
             missed: targets.filter(m => !ids.has(m.id)).map(m => ({ id: m.id, type: m.type, text: m.text.trim().slice(0, 40) })) });
           if (flag('local-detail') && K === KS[Math.min(1, KS.length - 1)]) {
-            local.push(`## ${variant} ${c.case_id} 种子 ${seedId} · 前 ${K} 段`);
+            local.push(`## ${mode} ${variant} ${c.case_id} 种子 ${seedId} · 前 ${K} 段`);
             for (const s of segs) local.push(`- [${s.score.toFixed(1)}] ${s.seg[0].real ? '真实' : '用例'}「${s.seg[0].convName || ''}」${s.seg.length} 条：${s.seg.map(m => m.text.slice(0, 30)).join(' | ')}`);
             local.push('');
           }
+        }
         }
       }
     }
   }
 
   // C7 有两封种子：一封放假通知（不该有事项），一封考试。按用例合并时取考试那封的召回（放假通知本来就不需要找）。
-  const keyOf = r => `${r.variant}|${r.case}|${r.K}`, merged = new Map();
+  const keyOf = r => `${r.mode}|${r.variant}|${r.case}|${r.K}`, merged = new Map();
   for (const r of rows) { const k = keyOf(r), old = merged.get(k); if (!old || r.recall > old.recall) merged.set(k, r); }
   const final = [...merged.values()];
-  const agg = (variant, K) => {
-    const xs = final.filter(r => r.variant === variant && r.K === K); if (!xs.length) return null;
+  const agg = (mode, variant, K) => {
+    const xs = final.filter(r => r.mode === mode && r.variant === variant && r.K === K); if (!xs.length) return null;
     const sum = f => xs.reduce((a, r) => a + f(r), 0);
-    return { variant, K, recall: +(sum(r => r.recall * r.targets) / (sum(r => r.targets) || 1)).toFixed(2),
+    return { mode, variant, K, recall: +(sum(r => r.recall * r.targets) / (sum(r => r.targets) || 1)).toFixed(2),
       keyRecall: +(sum(r => r.keyRecall * r.keyTargets) / (sum(r => r.keyTargets) || 1)).toFixed(2),
       avgCandidates: +(sum(r => r.candidates) / xs.length).toFixed(1), avgRealNoise: +(sum(r => r.realNoise) / xs.length).toFixed(1),
       avgWindowReal: +(sum(r => r.windowReal) / xs.length).toFixed(0) };
   };
   const overall = [];
-  for (const v of ['A', 'B']) for (const K of KS) { const a = agg(v, K); if (a) overall.push(a); }
+  for (const mode of MODES) for (const v of ['A', 'B']) for (const K of KS) { const a = agg(mode, v, K); if (a) overall.push(a); }
   const summary = { at: new Date().toISOString(), snapshots: snap.files.length, realMessages: snap.messages.length, realConversations: snap.convs.length,
-    realGroups: realGroups.length, settings: { days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
+    realGroups: realGroups.length, settings: { modes: MODES, ctxBefore: CTX_BEFORE, ctxAfter: CTX_AFTER, ctxBeforeMin: CTX_BEFORE_MIN / 60000, ctxAfterMin: CTX_AFTER_MIN / 60000, personOnly: PERSON_ONLY, atMe: AT_ME, nameCap: NAME_CAP, minHit: MIN_HIT, floor: FLOOR, days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
     perCase: final.map(({ missed, ...r }) => ({ ...r, missed: missed.map(m => m.id) })) };
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
 
   const L = ['# 跨渠道跟进 · 召回评测报告', '', `真实数据：${snap.files.length} 份快照，${snap.messages.length} 条消息，${snap.convs.length} 个会话（${realGroups.length} 个群）。报告里没有任何真实消息内容。`, '',
     'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群（更难，只能靠内容、发言人、时间）。',
-    'K = 取分数最高的前 K 段对话交给模型。召回率越高越好；混入的真实消息越少，后面模型要读的越少。', '',
-    '## 总体', '', '| 难度 | K | 召回率（全部相关） | 召回率（关键消息） | 平均候选条数 | 其中真实消息 | 时间窗口内真实消息总数 |', '|---|---|---|---|---|---|---|'];
-  for (const a of overall) L.push(`| ${a.variant} | ${a.K} | ${Math.round(a.recall * 100)}% | ${Math.round(a.keyRecall * 100)}% | ${a.avgCandidates} | ${a.avgRealNoise} | ${a.avgWindowReal} |`);
-  L.push('', '## 逐个用例（只列有遗漏的）', '');
-  for (const r of final.filter(r => r.missed.length)) L.push(`- ${r.variant} · K=${r.K} · ${r.case}：漏 ${r.missed.length}/${r.targets}，${r.missed.map(m => `${m.id}（${m.type}）「${m.text}」`).join('；')}`);
+    'K = 交给模型的对话片段数。分段：按间隔切段，取前 K 段；锚点：按单条消息打分，取前 K 条，各带前后几条上下文。',
+    '召回率越高越好；混入的真实消息越少，后面模型要读的越少。', ''];
+  const MODE_NAME = { segment: '分段', anchor: '锚点' };
+  for (const mode of MODES) {
+    L.push(`## 总体 · ${MODE_NAME[mode] || mode}`, '', '| 难度 | K | 召回率（全部相关） | 召回率（关键消息） | 平均候选条数 | 其中真实消息 | 时间窗口内真实消息总数 |', '|---|---|---|---|---|---|---|');
+    for (const a of overall.filter(a => a.mode === mode)) L.push(`| ${a.variant} | ${a.K} | ${Math.round(a.recall * 100)}% | ${Math.round(a.keyRecall * 100)}% | ${a.avgCandidates} | ${a.avgRealNoise} | ${a.avgWindowReal} |`);
+    L.push('');
+  }
+  L.push('## 逐个用例（只列有遗漏的）', '');
+  for (const r of final.filter(r => r.missed.length)) L.push(`- ${MODE_NAME[r.mode] || r.mode} · ${r.variant} · K=${r.K} · ${r.case}：漏 ${r.missed.length}/${r.targets}，${r.missed.map(m => `${m.id}（${m.type}）「${m.text}」`).join('；')}`);
   if (!final.some(r => r.missed.length)) L.push('全部找到。');
   fs.writeFileSync(path.join(OUT, 'report.md'), L.join('\n'), 'utf8');
   if (local.length) fs.writeFileSync(path.join(OUT, 'local-only-detail.md'), '# 仅本机查看：含真实消息，不要外发\n\n' + local.join('\n'), 'utf8');
