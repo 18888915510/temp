@@ -1,0 +1,137 @@
+{
+  "at": "2026-11-10T07:39:03.455Z",
+  "model": "deepseek-v4.1-flash-1017",
+  "cli": "codeagent",
+  "K": 20,
+  "variants": [
+    "A",
+    "B"
+  ],
+  "realMessages": 4255,
+  "byVariant": {
+    "A": {
+      "metrics": {
+        "事项数量": {
+          "ok": 1,
+          "all": 1
+        },
+        "消息归属": {
+          "ok": 5,
+          "all": 5
+        },
+        "消息作用": {
+          "ok": 4,
+          "all": 5
+        },
+        "事项识别": {
+          "ok": 3,
+          "all": 3
+        },
+        "方向": {
+          "ok": 3,
+          "all": 3
+        },
+        "截止日期": {
+          "ok": 4,
+          "all": 4
+        },
+        "对方状态": {
+          "ok": 4,
+          "all": 4
+        },
+        "最新要求（出处）": {
+          "ok": 3,
+          "all": 3
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 52,
+      "avgReal": 48,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 263.5,
+      "maxSeconds": 263.5,
+      "maxCandidates": 52,
+      "failed": []
+    },
+    "B": {
+      "metrics": {
+        "事项数量": {
+          "ok": 1,
+          "all": 1
+        },
+        "消息归属": {
+          "ok": 5,
+          "all": 5
+        },
+        "消息作用": {
+          "ok": 3,
+          "all": 5
+        },
+        "事项识别": {
+          "ok": 3,
+          "all": 3
+        },
+        "方向": {
+          "ok": 3,
+          "all": 3
+        },
+        "截止日期": {
+          "ok": 4,
+          "all": 4
+        },
+        "对方状态": {
+          "ok": 4,
+          "all": 5
+        },
+        "最新要求（出处）": {
+          "ok": 3,
+          "all": 3
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 54,
+      "avgReal": 50,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 152.4,
+      "maxSeconds": 152.4,
+      "maxCandidates": 54,
+      "failed": []
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "H11",
+      "seconds": 263.5,
+      "candidates": 52,
+      "real": 48,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 1
+    },
+    {
+      "variant": "B",
+      "case": "H11",
+      "seconds": 152.4,
+      "candidates": 54,
+      "real": 50,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 3
+    }
+  ]
+}
