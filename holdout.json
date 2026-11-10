@@ -39,7 +39,10 @@
       "nil_delivery": "回复“无/没有”，视为已完成",
       "unconfirmed_info": "未经确认的传闻，不能直接作为要求生效",
       "info_confirmed": "对传闻的确认，此时要求才生效"
-    }
+    },
+    "变更记录": [
+      "2026-11-10：H4 标准答案由 cancelled 改为 paused。原文「先暂停、等通知」不等于取消；这是看过 11-10 第一轮结果后、经用户确认的更正。H1～H5 此后不再作为验收题，验收用 holdout2.json。"
+    ]
   },
   "people": [
     {
@@ -667,10 +670,10 @@
     },
     {
       "case_id": "H4",
-      "title": "校招需求收集（群里布置上游，后被整体叫停）",
+      "title": "校招需求收集（群里布置上游，后被领导叫停）",
       "test_points": [
         "中转：上游任务不在邮件里，而是当前用户在群里布置的",
-        "已交付的保持已交付，其余全部取消",
+        "已交付的保持已交付，其余标为暂停",
         "整件事由领导私聊叫停",
         "同群另一件事要排除"
       ],
@@ -757,7 +760,7 @@
                 },
                 {
                   "person": "p_lina",
-                  "status": "cancelled",
+                  "status": "paused",
                   "evidence": [
                     "H4-DM1-M1"
                   ]
@@ -777,7 +780,7 @@
               "counterparties": [
                 {
                   "person": "p_chenming",
-                  "status": "cancelled",
+                  "status": "paused",
                   "evidence": [
                     "H4-DM1-M1"
                   ]
@@ -826,7 +829,7 @@
           {
             "msg_id": "H4-DM1-M1",
             "matter": "M1",
-            "type": "cancel"
+            "type": "pause"
           }
         ]
       }

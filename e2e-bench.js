@@ -109,7 +109,7 @@ async function main() {
 
   const rate = v => v.all ? Math.round(v.ok / v.all * 100) + '%' : '-';
   const summary = { at: new Date().toISOString(), model: F.MODEL, cli: F.CLI, K, variants: VARIANTS, realMessages: snap.messages.length, byVariant: {}, perCase: [] };
-  const L = ['# 跨渠道跟进 · 端到端评测报告', '', `模型 ${F.MODEL}（${F.CLI}）· 召回：锚点前 ${K} 条 · 真实消息 ${snap.messages.length} 条。报告里没有任何真实消息内容。`, '',
+  const L = ['# 跨渠道跟进 · 端到端评测报告', '', `模型 ${F.MODEL}（${F.CLI}）· 召回：锚点前 ${K} 条 · 真实消息 ${snap.messages.length} 条 · 用例文件：${path.basename(R.FILE || '')}。报告里没有任何真实消息内容。`, '',
     'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群。', '「召回漏掉」= 模型根本没看到的相关消息；「误挂真实消息」= 模型把无关的真实消息算进了事项。', '',
     '时间口径：编造用例的发送时间、评测时间、正文和标准答案全部保持原样；真实噪音消息的时间在内存中整体反向平移（每个用例按其整周差），使噪音与用例的相对位置和原方案一致。真实快照文件未修改，这是合成评测的噪音时间映射。', ''];
   for (const variant of VARIANTS) {
@@ -126,7 +126,7 @@ async function main() {
     L.push(`## 难度 ${variant}`, '', `平均候选 ${agg.avgCandidates} 条（其中真实消息 ${agg.avgReal} 条）· 平均耗时 ${agg.avgSeconds} 秒`,
       `召回漏掉相关消息 ${agg.missedByRecall} 条 · 误挂真实消息 ${agg.misLinked} 条 · 完全由真实消息生成的多余事项 ${agg.extraFromNoise} 个${agg.failed.length ? ` · 没拿到有效 JSON：${agg.failed.join('、')}` : ''}`, '',
       '| 指标 | 正确率 | 对/总 |', '|---|---|---|');
-    for (const [k, v] of Object.entries(tot)) L.push(`| ${k} | ${rate(v)} | ${v.ok}/${v.all} |`);
+    for (const [k, v] of Object.entries(tot)) L.push(`| ${k === '消息作用' ? k + '（次要，不改变卡片）' : k} | ${rate(v)} | ${v.ok}/${v.all} |`);
     L.push('');
   }
   L.push('## 逐个用例（只列错的）', '');

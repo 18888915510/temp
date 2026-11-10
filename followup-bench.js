@@ -49,7 +49,7 @@ const fmt = s => {
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const withWeek = s => `${fmt(s)}（周${WEEK[new Date(ms(s) + 8 * 3600000).getUTCDay()]}）`;
 const TYPES = ['seed', 'task_assignment', 'deadline_change', 'extension_request', 'extension_approved', 'requirement', 'question', 'ack',
-  'delivery', 'nil_delivery', 'delivery_by_others', 'cancel', 'meeting', 'not_applicable_to_user', 'unconfirmed_info', 'info_confirmed', 'irrelevant'];
+  'delivery', 'nil_delivery', 'delivery_by_others', 'cancel', 'pause', 'meeting', 'not_applicable_to_user', 'unconfirmed_info', 'info_confirmed', 'irrelevant'];
 
 function material(c) {
   const until = ms(c.eval_time), seen = x => ms(x.sent_at) <= until, L = [];
@@ -86,19 +86,28 @@ function prompt(c, mat = material(c), now = c.eval_time) {
    补充说明：同一事项的补充、范围扩大或确认（例如同一门考试追加专题、同一批材料补充要求、传闻经确认后生效）并回原事项，作为该事项的最新要求或截止日期变化，不要另立事项。
    例外：只有独立交付物或独立责任构成派生任务时才单独成为一个事项（例如群里另一个人要求当前用户再交一份与★邮件不同的东西）。
 1. 一封★邮件可能包含多个事项，要拆开。纯通知（没有任何人需要交付任何东西）不生成事项。
+   拆分依据（2026-11-10）：动作性质不同（自己操作 vs 把东西交给某人）、交付对象不同、或截止不同，就是不同事项。例如「完成考试，并把成绩截图发我」是两件：考试（self）和成绩截图（outbound）。
+   之后的截止变化、补充要求只挂到它明确针对的那一件，不要套到同一封邮件里的其他事项上。
    当前用户只在抄送中、但收件人之间有交付要求的★邮件，要生成一个 direction=cc_only 的事项，对方列出要交付的人。
 2. direction 取值：inbound（谁还要交给我）、outbound（我要交给谁）、relay（先从上游收，再交给下游）、cc_only（当前用户只在抄送、只是知会）、self（我自己要完成，没有明确交付对象）。
+   self 的含义（2026-11-10）：当前用户自己动手完成、不需要把一份东西交到某个人手里的事，例如在系统里录入、上网课考试、自己报名、自己参会。
+   即使有人会检查或统计完成情况，也算 self；只有要把文件、名单、材料、结论发给某个人时，才是 outbound 或 relay。self 事项的 counterparties 留空。
    判断方向只看「东西最后交到谁手里」：当前用户发邮件要别人提交、反馈、确认 → inbound（即使邮件没写「给我」）；别人要当前用户提交 → outbound；当前用户要先收齐再交给别人 → relay。
    先找出完整交付链再定方向：当前用户同时承担「向上游收集」和「向下游交付」时，方向必须是 relay，不能因为收集邮件是当前用户发出的就退成 inbound。
    relay 要分别保留上游和下游各自的责任人、截止日期和交付状态；即使上下游是同一份交付物，也不能丢掉向下游转交的责任。
 3. 相对时间（明天、周三、下周一）按那条消息的发送时间计算，不是按现在。
-4. 截止日期的变化要按时间顺序记录。延期「申请」不算生效，「批准」后才生效。只针对别人的放宽，不改当前用户的截止日期。
-5. 对方状态 status 取值：pending、delivered（含回复「无/没有」）、overdue（现在已过截止且没交）、cancelled（对方说不用做了）。收件人是邮件组时，展开成具体的人逐个列出。
+4. 截止日期的变化要按时间顺序记录。调整截止的「请求」（延后或提前都算）不算生效，有权决定的一方同意后才生效；没人同意就保持原截止。只针对别人的放宽，不改当前用户的截止日期。
+   叫停（2026-11-10）：发起人或领导说「先停一下」「先暂停、等通知」时，尚未交付的对方状态标 paused，已交付的保持 delivered；之后明确恢复的，按恢复时的要求和截止重新判断（回到 pending 或 overdue）。
+   cancelled 只用于明确说「不用做了」「取消」；只是少做几份（范围缩小）不算取消，记为最新要求。
+5. 对方状态 status 取值：pending、delivered（含回复「无/没有」）、overdue（现在已过截止且没交）、cancelled（明确不用做了）、paused（被叫停，等通知）。
+   别人代责任人交给当前用户（例如秘书代主管交）仍算责任人已交付，记在责任人名下，不要把代交的人列成对方。收件人是邮件组时，展开成具体的人逐个列出。
    输出前按最终有效截止做一次一致性检查：已经交付或已取消的优先保留；没有任何交付且现在已过最终截止的，标 overdue；已批准的延期用新截止，只有申请不算批准。relay 的上游和下游分别按各自截止判断。
 6. 未经确认的传闻不能当作要求生效。
 7. 人员一律用下面的人员 ID。
 8. 每条消息都要给出 message_labels，无关的 matter 写 null；一条消息属于多个事项时 matter 写数组。★邮件生成了事项时 type 写 seed，没生成事项时 matter 写 null、type 写 irrelevant。只说「收到」「好的」「抓紧」、没有新信息的消息，type 写 ack。type 只能取：${TYPES.join('、')}。
    例外：材料里 R 开头的真实消息如果 matter 为 null，可以整条省略不列；其余消息（★邮件、用例消息）仍要逐条标注。
+   type 口径：extension_request = 请求调整截止（延后或提前）但还没人同意；extension_approved = 同意了调整；pause = 叫停 / 暂停；
+   delivery = 交给当前用户（包括别人代交）；delivery_by_others = 当前用户只是知会时，别人之间的交付；范围缩小记 requirement，整件不做记 cancel。
 
 人员表：
 ${people}
@@ -313,8 +322,9 @@ async function main() {
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
 
   // 人看的报告：只列错的，外加每个用例的考点。
-  const L = [`# 跨渠道跟进 · 评测报告`, '', `模型 ${MODEL}（${CLI}）· ${summary.at}`, '', '## 总体', '', '| 指标 | 正确率 | 对/总 |', '|---|---|---|'];
-  for (const [k, v] of Object.entries(summary.overall)) L.push(`| ${k} | ${Math.round(v.rate * 100)}% | ${v.ok}/${v.all} |`);
+  const L = [`# 跨渠道跟进 · 评测报告`, '', `模型 ${MODEL}（${CLI}）· ${summary.at} · 用例文件：${path.basename(FILE)}`, '', '## 总体', '', '| 指标 | 正确率 | 对/总 |', '|---|---|---|'];
+  // 消息作用是次要指标：标签分歧不改变卡片内容（2026-11-10）。
+  for (const [k, v] of Object.entries(summary.overall)) L.push(`| ${k === '消息作用' ? k + '（次要）' : k} | ${Math.round(v.rate * 100)}% | ${v.ok}/${v.all} |`);
   L.push('', `消息关联准确率 ${summary.linkPrecision}，召回率 ${summary.linkRecall}（只看「相关 / 无关」，不看挂到哪个事项）`, '');
   if (summary.failedRuns.length) L.push(`**没拿到有效 JSON 的运行：** ${summary.failedRuns.join('、')}（原始输出见 raw/）`, '');
   for (const x of results) {

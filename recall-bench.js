@@ -25,6 +25,7 @@ const KS = String(opt('k', '3,5,10,20')).split(',').map(Number).filter(n => n > 
 const GAP = Number(opt('gap-minutes', 60)) * 60000; // 同一会话里，间隔超过这么久就切成新的一段
 // 上下文：回复和补充多在锚点之后，所以前面少带、后面多带。
 const CTX_BEFORE = Number(opt('ctx-before', 2)), CTX_AFTER = Number(opt('ctx-after', 6)), CTX_BEFORE_MIN = Number(opt('ctx-before-minutes', 15)) * 60000, CTX_AFTER_MIN = Number(opt('ctx-after-minutes', 60)) * 60000, PERSON_ONLY = Number(opt('person-only', 0.8)), AT_ME = Number(opt('at-me', 3));
+const FOLLOW = Number(opt('follow', 4)), FOLLOW_N = Number(opt('follow-n', 3)), FOLLOW_DAYS = Number(opt('follow-days', 7)) * 86400000;
 const MODES = String(opt('modes', 'segment,anchor')).split(',');
 const NAME_CAP = Number(opt('name-cap', 6)), MIN_HIT = Number(opt('min-hit', 2)), FLOOR = Number(opt('floor', 0.4));
 const LOOKBACK = Number(opt('lookback-days', 3)) * 86400000; // 种子邮件发出前多少天的消息也算候选
@@ -34,6 +35,9 @@ const WEEK = 7 * 86400000;
 // 关键消息：直接改变卡片内容的（漏了会让卡片出错）。其余（收到、提问、会议）漏了影响小。
 const KEY_TYPES = new Set(['task_assignment', 'deadline_change', 'extension_request', 'extension_approved', 'requirement', 'delivery', 'nil_delivery',
   'delivery_by_others', 'cancel', 'info_confirmed']);
+
+// 从正文里解析「@名字」（快照里没有单独的被 @ 名单；用例消息也照样带 mentions）。
+const mentionsOf = t => [...String(t || '').matchAll(/(?:^|[\s，,。])@([^\s@，,：:。]{1,12})/g)].map(x => x[1]);
 
 // ---------- 读真实快照 ----------
 function loadSnapshots() {
@@ -48,7 +52,8 @@ function loadSnapshots() {
       if (!m || !Number.isFinite(m.at)) continue;
       const key = m.sourceId || `msg:${cid}:${m.key}`;
       messages.set(key, { id: key, real: true, conv: String(m.conv || cid), convName: m.convName, group: !!m.group, at: m.at,
-        sender: m.mine ? '我' : String(m.sender || ''), mine: !!m.mine, atMe: !!m.atMe, text: String(m.text || m.preview || '') });
+        sender: m.mine ? '我' : String(m.sender || ''), mine: !!m.mine, atMe: !!m.atMe, text: String(m.text || m.preview || ''),
+        mentions: mentionsOf(m.text || m.preview) });
       if (!convs.has(String(cid))) convs.set(String(cid), { id: String(cid), group: !!m.group, name: String(m.convName || cid) });
     }
     for (const m of s.mails || []) if (m && m.sourceId && Number.isFinite(m.at)) messages.set(m.sourceId, { id: m.sourceId, real: true, mail: true, at: m.at,
@@ -181,6 +186,18 @@ function anchors(byConv, overlap, people) {
   }
   const hitConvs = new Set(all.filter(x => x.hit).map(x => x.m.conv));
   for (const x of all) x.score = x.content + (x.hit || hitConvs.has(x.m.conv) ? x.name : x.name * 0.3) + x.person;
+  // 被 @ 的人后续发言（2026-11-10，H5）：布置任务时 @ 了谁，被 @ 的人之后几天在同一会话里的头几条发言，
+  // 往往就是回应、提问或交差，即使和邮件没有共同词。触发的锚点：内容命中且带 @，或当前用户 @ 了邮件参与人。
+  for (const a of all) {
+    const ment = a.m.mentions || [];
+    if (!ment.length || !(a.hit || (a.m.mine && ment.some(x => people.has(x))))) continue;
+    const seen = new Map();
+    for (const x of all) {
+      if (x.m.conv !== a.m.conv || x.m.at <= a.m.at || x.m.at - a.m.at > FOLLOW_DAYS || !ment.includes(x.m.sender)) continue;
+      const n = (seen.get(x.m.sender) || 0) + 1; seen.set(x.m.sender, n);
+      if (n <= FOLLOW_N && !x.followed) { x.score += FOLLOW; x.followed = true; }
+    }
+  }
   all.sort((a, b) => b.score - a.score);
   const covered = new Set(), out = [];
   for (const x of all) {
@@ -263,11 +280,11 @@ function main() {
   const overall = [];
   for (const mode of MODES) for (const v of ['A', 'B']) for (const K of KS) { const a = agg(mode, v, K); if (a) overall.push(a); }
   const summary = { at: new Date().toISOString(), snapshots: snap.files.length, realMessages: snap.messages.length, realConversations: snap.convs.length,
-    realGroups: realGroups.length, settings: { modes: MODES, ctxBefore: CTX_BEFORE, ctxAfter: CTX_AFTER, ctxBeforeMin: CTX_BEFORE_MIN / 60000, ctxAfterMin: CTX_AFTER_MIN / 60000, personOnly: PERSON_ONLY, atMe: AT_ME, nameCap: NAME_CAP, minHit: MIN_HIT, floor: FLOOR, days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
+    realGroups: realGroups.length, settings: { modes: MODES, ctxBefore: CTX_BEFORE, ctxAfter: CTX_AFTER, ctxBeforeMin: CTX_BEFORE_MIN / 60000, ctxAfterMin: CTX_AFTER_MIN / 60000, personOnly: PERSON_ONLY, atMe: AT_ME, follow: FOLLOW, followN: FOLLOW_N, followDays: FOLLOW_DAYS / 86400000, nameCap: NAME_CAP, minHit: MIN_HIT, floor: FLOOR, days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
     perCase: final.map(({ missed, ...r }) => ({ ...r, missed: missed.map(m => m.id) })) };
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
 
-  const L = ['# 跨渠道跟进 · 召回评测报告', '', `真实数据：${snap.files.length} 份快照，${snap.messages.length} 条消息，${snap.convs.length} 个会话（${realGroups.length} 个群）。报告里没有任何真实消息内容。`, '',
+  const L = ['# 跨渠道跟进 · 召回评测报告', '', `用例文件：${path.basename(FILE)}`, '', `真实数据：${snap.files.length} 份快照，${snap.messages.length} 条消息，${snap.convs.length} 个会话（${realGroups.length} 个群）。报告里没有任何真实消息内容。`, '',
     'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群（更难，只能靠内容、发言人、时间）。',
     'K = 交给模型的对话片段数。分段：按间隔切段，取前 K 段；锚点：按单条消息打分，取前 K 条，各带前后几条上下文。',
     '召回率越高越好；混入的真实消息越少，后面模型要读的越少。', ''];
@@ -286,4 +303,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { tokens, recall, participants, loadSnapshots, injected, idfOf, realGroupsOf, DATA, ME, WEEK, KEY_TYPES, DIR, HOME };
+module.exports = { FILE, tokens, recall, participants, loadSnapshots, injected, idfOf, realGroupsOf, DATA, ME, WEEK, KEY_TYPES, DIR, HOME };
