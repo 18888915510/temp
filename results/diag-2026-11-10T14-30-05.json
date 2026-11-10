@@ -1,0 +1,97 @@
+{
+  "e2e": {
+    "folder": "e2e-2026-11-10T11-47-18",
+    "rows": [
+      {
+        "tag": "B-H11",
+        "seconds": 213.4,
+        "candidates": 54,
+        "promptChars": 19332,
+        "outputChars": 1841,
+        "matters": 3,
+        "labels": 5
+      },
+      {
+        "tag": "A-H11",
+        "seconds": 91.4,
+        "candidates": 52,
+        "promptChars": 18979,
+        "outputChars": 2021,
+        "matters": 3,
+        "labels": 5
+      },
+      {
+        "tag": "B-H12",
+        "seconds": 64.8,
+        "candidates": 76,
+        "promptChars": 12929,
+        "outputChars": 918,
+        "matters": 2,
+        "labels": 4
+      },
+      {
+        "tag": "B-H13",
+        "seconds": 64.7,
+        "candidates": 66,
+        "promptChars": 12474,
+        "outputChars": 777,
+        "matters": 1,
+        "labels": 5
+      },
+      {
+        "tag": "A-H12",
+        "seconds": 62.8,
+        "candidates": 71,
+        "promptChars": 12165,
+        "outputChars": 867,
+        "matters": 2,
+        "labels": 4
+      },
+      {
+        "tag": "A-H13",
+        "seconds": 62.4,
+        "candidates": 66,
+        "promptChars": 12470,
+        "outputChars": 851,
+        "matters": 1,
+        "labels": 5
+      },
+      {
+        "tag": "A-H15",
+        "seconds": 47,
+        "candidates": 43,
+        "promptChars": 12810,
+        "outputChars": 938,
+        "matters": 2,
+        "labels": 3
+      },
+      {
+        "tag": "B-H14",
+        "seconds": 44.3,
+        "candidates": 76,
+        "promptChars": 15643,
+        "outputChars": 662,
+        "matters": 1,
+        "labels": 3
+      },
+      {
+        "tag": "A-H14",
+        "seconds": 32.7,
+        "candidates": 69,
+        "promptChars": 14438,
+        "outputChars": 654,
+        "matters": 1,
+        "labels": 3
+      },
+      {
+        "tag": "B-H15",
+        "seconds": 30.2,
+        "candidates": 43,
+        "promptChars": 12810,
+        "outputChars": 898,
+        "matters": 2,
+        "labels": 3
+      }
+    ]
+  }
+}
