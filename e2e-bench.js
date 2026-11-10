@@ -54,6 +54,8 @@ function buildMaterial(c, seeds, cands) {
 // 把真实噪音消息的时间整体反向移动（减 shift），使它们与用例的相对时间位置和原方案一致。
 // 只改内存里的副本，真实快照文件不动。
 function mapNoise(m, shift) { return m.real ? { ...m, at: m.at - shift } : m; }
+// 整周差（可为正、负、零），只依赖传入的两个时间点，便于确定性测试。
+function noiseShift(snapAt, evalTime) { return Math.floor((snapAt - Date.parse(evalTime)) / R.WEEK) * R.WEEK; }
 
 async function main() {
   const snap = R.loadSnapshots();
@@ -71,7 +73,7 @@ async function main() {
     if (variant === 'B' && !realGroups.length) continue;
     for (const c of cases) jobs.push(async () => {
       // 用例时间轴保持原样；真实噪音消息整体反向移动 shift，使相对位置与原方案一致。
-      const until = Date.parse(c.eval_time), shift = Math.floor((snap.at - until) / R.WEEK) * R.WEEK;
+      const until = Date.parse(c.eval_time), shift = noiseShift(snap.at, c.eval_time);
       const caseMsgs = R.injected(c, 0, variant, realGroups);
       const pool = [...snap.messages.filter(m => m.at - shift <= until).map(m => mapNoise(m, shift)), ...caseMsgs];
       const idf = R.idfOf(pool.map(m => m.text));
@@ -145,4 +147,5 @@ async function main() {
   console.log(JSON.stringify({ out: OUT, byVariant: summary.byVariant }, null, 2));
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
+module.exports = { mapNoise, noiseShift, buildMaterial };

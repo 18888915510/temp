@@ -1,8 +1,9 @@
 'use strict';
-// 不调用模型的针对性验证：时间显示、噪音时间映射、用例语义是否保持原样。
-// 只读 cases.json 和内存里的快照副本，不写任何文件，不调用模型。
-const fs = require('fs'), path = require('path');
-const R = require('./recall-bench.js'), F = require('./followup-bench.js');
+// 不调用模型、不读真实快照的确定性验证：时间显示、噪音时间映射、用例语义是否保持原样。
+// 直接调用生产函数（F.withWeek / E.mapNoise / E.noiseShift），不复制公式。
+const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
+const F = require('./followup-bench.js');
+const E = require('./e2e-bench.js');
 
 let bad = 0;
 const check = (name, got, want) => {
@@ -10,47 +11,64 @@ const check = (name, got, want) => {
   if (!ok) bad++;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: ${JSON.stringify(got)}${ok ? '' : ' != ' + JSON.stringify(want)}`);
 };
+const D = 86400000, W = 7 * D;
 
-// 1. withWeek 统一按 UTC+08:00 渲染
+// 1. withWeek 统一按 UTC+08:00 渲染（保留原 6 项）
 check('Z 输入 → +08 墙上时间', F.withWeek('2026-11-03T07:00:00.000Z'), '2026-11-03 15:00（周二）');
 check('+08 输入原样', F.withWeek('2026-11-03T15:00:00+08:00'), '2026-11-03 15:00（周二）');
 check('跨日（Z 的 16:30 → 次日 00:30）', F.withWeek('2026-11-03T16:30:00.000Z'), '2026-11-04 00:30（周三）');
-check('跨月（Z 的 10-31T16:30 → 11-01 00:30）', F.withWeek('2026-10-31T16:30:00.000Z'), '2026-11-01 00:30（周日）');
+check('跨月（10-31T16:30Z → 11-01）', F.withWeek('2026-10-31T16:30:00.000Z'), '2026-11-01 00:30（周日）');
 check('跨年（12-31T16:30Z → 01-01）', F.withWeek('2026-12-31T16:30:00.000Z'), '2027-01-01 00:30（周五）');
-check('纯日期按当天 00:00', F.withWeek('2026-11-13'), '2026-11-13 00:00（周五）');
+check('纯日期按 +08 当天 00:00', F.withWeek('2026-11-13'), '2026-11-13 00:00（周五）');
 
-// 2. cases.json 完全没被改（与 git HEAD 的 blob 逐字节一致）
-const { execFileSync } = require('child_process');
-const head = execFileSync('git', ['show', 'HEAD:cases.json'], { cwd: __dirname, encoding: 'buffer' });
-const disk = fs.readFileSync(path.join(__dirname, 'cases.json'));
-check('cases.json 与 HEAD 逐字节一致', Buffer.compare(head, disk) === 0, true);
+// 2. noiseShift：正 / 负 / 零整周差，且总是整周倍数
+const base = '2026-11-05T09:00:00+08:00';
+check('零差', E.noiseShift(Date.parse(base), base), 0);
+check('正差（快照晚 14 天）', E.noiseShift(Date.parse(base) + 14 * D, base), 14 * D);
+check('负差（快照早 7 天）', E.noiseShift(Date.parse(base) - 7 * D, base), -7 * D);
+check('不足一周向下取整为 0', E.noiseShift(Date.parse(base) + 3 * D, base), 0);
+check('差值为整周倍数', E.noiseShift(Date.parse(base) + 10 * D, base) % W, 0);
 
-// 3. 噪音时间映射：真实消息反向平移后，与用例的相对位置和原方案一致
-const snap = R.loadSnapshots();
-const shiftOf = c => Math.floor((snap.at - Date.parse(c.eval_time)) / R.WEEK) * R.WEEK;
-const realGroups = R.realGroupsOf(snap);
-for (const c of R.DATA.cases) {
-  const shift = shiftOf(c);
-  const until = Date.parse(c.eval_time);
-  const caseMsgs = R.injected(c, 0, 'A', realGroups);
-  // 用例消息时间必须与 cases.json 原值一致（不平移）
-  const sameTime = caseMsgs.every(m => {
-    const src = [...c.emails, ...c.groups.flatMap(g => g.messages), ...(c.dms || []).flatMap(d => d.messages)]
-      .find(x => x.msg_id === m.id);
-    return src && m.at === Date.parse(src.sent_at);
-  });
-  check(`${c.case_id} 用例消息时间保持原样`, sameTime, true);
-  // 真实消息映射后不晚于用例的「现在」
-  const mapped = snap.messages.filter(m => m.at - shift <= until).map(m => ({ ...m, at: m.at - shift }));
-  const inWindow = mapped.every(m => m.at <= until);
-  check(`${c.case_id} 映射后真实消息都在窗口内`, inWindow, true);
-  // 映射后的真实消息条数与「原方案按 until+shift 截断」一致
-  const before = snap.messages.filter(m => m.at <= until + shift).length;
-  check(`${c.case_id} 映射后真实消息条数不变`, mapped.length, before);
-  // 用例的截止日期与状态语义（直接读标准答案，未做任何改写）
-  const gold = F.goldMatters(c);
-  console.log(`  ${c.case_id} 标准答案：` + gold.map(m => `${m.matter_id} ${m.direction} 截止=${m.deadline}${m.downstream_deadline ? ' 下游=' + m.downstream_deadline : ''} 对方=${m.counterparties.map(x => x.person + ':' + x.status).join(',') || '无'}`).join(' | '));
+// 3. mapNoise：只改真实消息的 at，输入对象不变，相对时间差按 shift 平移
+const real = { id: 'R1', real: true, at: 1000 };
+const caseMsg = { id: 'C2-G1-M1', real: false, at: 2000 };
+const frozen = JSON.stringify(real);
+for (const shift of [0, 7 * D, -7 * D]) {
+  const mapped = E.mapNoise(real, shift);
+  check(`mapNoise(${shift / D}周) 时间反向移动`, mapped.at, real.at - shift);
+  check(`mapNoise(${shift / D}周) 输入对象未被改`, JSON.stringify(real) === frozen, true);
+  check(`mapNoise(${shift / D}周) 返回新对象`, mapped !== real, true);
+  check(`mapNoise(${shift / D}周) 用例消息原样返回`, E.mapNoise(caseMsg, shift), caseMsg);
+  const before = real.at - caseMsg.at, after = E.mapNoise(real, shift).at - caseMsg.at;
+  check(`mapNoise(${shift / D}周) 相对差按 shift 平移`, after - before, -shift);
 }
+
+// 4. 窗口边界（含「未来消息被排除」）：与主流程一致，按「原始时间 - shift <= until」过滤，再映射
+const until = Date.parse(base);
+const win = (shift) => [until + shift - 1, until + shift, until + shift + 1]
+  .map(at => ({ real: true, at }))
+  .filter(m => m.at - shift <= until)
+  .map(m => E.mapNoise(m, shift).at);
+check('零差：截止前/等于保留，未来排除', win(0), [until - 1, until]);
+check('正差 14 天：截止前/等于保留，未来排除', win(14 * D), [until - 1, until]);
+check('负差 7 天：截止前/等于保留，未来排除', win(-7 * D), [until - 1, until]);
+
+// 5. cases.json 相对原始基线 b477817 完全未改
+const BASE = 'b4778175006064943ec06a32ef4e59610d57db6c';
+const blob = execFileSync('git', ['cat-file', 'blob', `${BASE}:cases.json`], { cwd: __dirname, encoding: 'buffer' });
+const disk = fs.readFileSync(path.join(__dirname, 'cases.json'));
+check('cases.json 与基线 b477817 逐字节一致', Buffer.compare(blob, disk) === 0, true);
+
+// 6. 用例语义断言（只断言关键字段，不打印标准答案文本）
+const d = JSON.parse(disk.toString('utf8'));
+const gold = id => F.goldMatters(d.cases.find(c => c.case_id === id));
+check('C1 拆成两个事项', gold('C1').length, 2);
+check('C1 截止保持原样', gold('C1').map(m => m.deadline), ['2026-11-11', '2026-11-18']);
+check('C2 是 relay 且上下游截止都在', gold('C2').map(m => [m.direction, m.deadline, m.downstream_deadline]), [['relay', '2026-11-04', '2026-11-07']]);
+check('C4 派生任务保留', gold('C4').map(m => m.direction), ['cc_only', 'outbound']);
+check('C5 两个交付物保留', gold('C5').length, 2);
+check('C6 张伟保持 overdue', gold('C6')[0].counterparties.find(x => x.person === 'p_zhangwei').status, 'overdue');
+check('C7 合并为一个事项', gold('C7').length, 1);
 
 console.log(bad ? `\n${bad} 项失败` : '\n全部通过');
 process.exit(bad ? 1 : 0);
