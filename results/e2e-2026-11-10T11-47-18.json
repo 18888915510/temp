@@ -1,0 +1,233 @@
+{
+  "at": "2026-11-10T03:53:29.268Z",
+  "model": "deepseek-v4.1-flash-1017",
+  "cli": "codeagent",
+  "K": 20,
+  "variants": [
+    "A",
+    "B"
+  ],
+  "realMessages": 4048,
+  "byVariant": {
+    "A": {
+      "metrics": {
+        "事项数量": {
+          "ok": 5,
+          "all": 5
+        },
+        "消息归属": {
+          "ok": 20,
+          "all": 20
+        },
+        "消息作用": {
+          "ok": 19,
+          "all": 20
+        },
+        "事项识别": {
+          "ok": 9,
+          "all": 9
+        },
+        "方向": {
+          "ok": 9,
+          "all": 9
+        },
+        "截止日期": {
+          "ok": 9,
+          "all": 10
+        },
+        "对方状态": {
+          "ok": 11,
+          "all": 12
+        },
+        "最新要求（出处）": {
+          "ok": 8,
+          "all": 8
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 60.2,
+      "avgReal": 57.2,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 59.3,
+      "maxSeconds": 91.4,
+      "maxCandidates": 71,
+      "failed": []
+    },
+    "B": {
+      "metrics": {
+        "事项数量": {
+          "ok": 5,
+          "all": 5
+        },
+        "消息归属": {
+          "ok": 20,
+          "all": 20
+        },
+        "消息作用": {
+          "ok": 19,
+          "all": 20
+        },
+        "事项识别": {
+          "ok": 9,
+          "all": 9
+        },
+        "方向": {
+          "ok": 8,
+          "all": 9
+        },
+        "截止日期": {
+          "ok": 10,
+          "all": 10
+        },
+        "对方状态": {
+          "ok": 10,
+          "all": 13
+        },
+        "最新要求（出处）": {
+          "ok": 8,
+          "all": 8
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 63,
+      "avgReal": 60,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 83.5,
+      "maxSeconds": 213.4,
+      "maxCandidates": 76,
+      "failed": []
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "H11",
+      "seconds": 91.4,
+      "candidates": 52,
+      "real": 48,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 3
+    },
+    {
+      "variant": "A",
+      "case": "H12",
+      "seconds": 62.8,
+      "candidates": 71,
+      "real": 68,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "A",
+      "case": "H13",
+      "seconds": 62.4,
+      "candidates": 66,
+      "real": 62,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "A",
+      "case": "H14",
+      "seconds": 32.7,
+      "candidates": 69,
+      "real": 67,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "A",
+      "case": "H15",
+      "seconds": 47,
+      "candidates": 43,
+      "real": 41,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "B",
+      "case": "H11",
+      "seconds": 213.4,
+      "candidates": 54,
+      "real": 50,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 3
+    },
+    {
+      "variant": "B",
+      "case": "H12",
+      "seconds": 64.8,
+      "candidates": 76,
+      "real": 73,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 2
+    },
+    {
+      "variant": "B",
+      "case": "H13",
+      "seconds": 64.7,
+      "candidates": 66,
+      "real": 62,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "B",
+      "case": "H14",
+      "seconds": 44.3,
+      "candidates": 76,
+      "real": 74,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    },
+    {
+      "variant": "B",
+      "case": "H15",
+      "seconds": 30.2,
+      "candidates": 43,
+      "real": 41,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    }
+  ]
+}
