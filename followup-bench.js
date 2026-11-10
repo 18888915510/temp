@@ -340,4 +340,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
-module.exports = { prompt, score, parseJson, goldMatters, align, run, pool, initCli, withWeek, CLI, MODEL };
+module.exports = { prompt, score, parseJson, goldMatters, align, run, pool, initCli, withWeek, CLI, MODEL, EFFORT, effortApplied: () => !!EFFORT && supports('--effort') };

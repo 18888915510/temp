@@ -109,8 +109,8 @@ async function main() {
   const results = await F.pool(jobs, PAR);
 
   const rate = v => v.all ? Math.round(v.ok / v.all * 100) + '%' : '-';
-  const summary = { at: new Date().toISOString(), model: F.MODEL, cli: F.CLI, K, variants: VARIANTS, realMessages: snap.messages.length, byVariant: {}, perCase: [] };
-  const L = ['# 跨渠道跟进 · 端到端评测报告', '', `模型 ${F.MODEL}（${F.CLI}）· 召回：锚点前 ${K} 条 · 真实消息 ${snap.messages.length} 条 · 用例文件：${path.basename(R.FILE || '')}。报告里没有任何真实消息内容。`, '',
+  const summary = { at: new Date().toISOString(), model: F.MODEL, cli: F.CLI, effort: F.EFFORT || 'default', effortApplied: F.effortApplied(), K, variants: VARIANTS, realMessages: snap.messages.length, byVariant: {}, perCase: [] };
+  const L = ['# 跨渠道跟进 · 端到端评测报告', '', `模型 ${F.MODEL}（${F.CLI}）· 思考档：${F.EFFORT ? F.EFFORT + (F.effortApplied() ? '（已生效）' : '（CLI 不支持，未生效）') : '默认'} · 超时 ${Number((process.argv.find((a, i, x) => x[i - 1] === '--timeout')) || 300)} 秒 · 召回：锚点前 ${K} 条 · 真实消息 ${snap.messages.length} 条 · 用例文件：${path.basename(R.FILE || '')}。报告里没有任何真实消息内容。`, '',
     'A = 用例群保持原名；B = 用例群消息并入你最活跃的真实群。', '「召回漏掉」= 模型根本没看到的相关消息；「误挂真实消息」= 模型把无关的真实消息算进了事项。', '',
     '时间口径：编造用例的发送时间、评测时间、正文和标准答案全部保持原样；真实噪音消息的时间在内存中整体反向平移（每个用例按其整周差），使噪音与用例的相对位置和原方案一致。真实快照文件未修改，这是合成评测的噪音时间映射。', ''];
   for (const variant of VARIANTS) {
