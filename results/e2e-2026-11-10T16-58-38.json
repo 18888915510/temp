@@ -1,0 +1,89 @@
+{
+  "at": "2026-11-10T09:03:03.709Z",
+  "model": "deepseek-v4.1-flash-1017",
+  "cli": "codeagent",
+  "effort": "default",
+  "effortApplied": false,
+  "K": 20,
+  "variants": [
+    "A"
+  ],
+  "realMessages": 4292,
+  "byVariant": {
+    "A": {
+      "metrics": {
+        "事项数量": {
+          "ok": 2,
+          "all": 2
+        },
+        "消息归属": {
+          "ok": 10,
+          "all": 10
+        },
+        "消息作用": {
+          "ok": 8,
+          "all": 10
+        },
+        "事项识别": {
+          "ok": 4,
+          "all": 4
+        },
+        "方向": {
+          "ok": 4,
+          "all": 4
+        },
+        "截止日期": {
+          "ok": 5,
+          "all": 5
+        },
+        "对方状态": {
+          "ok": 7,
+          "all": 8
+        },
+        "最新要求（出处）": {
+          "ok": 5,
+          "all": 5
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 59,
+      "avgReal": 55,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 131.8,
+      "maxSeconds": 218.5,
+      "maxCandidates": 66,
+      "failed": []
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "H11",
+      "seconds": 218.5,
+      "candidates": 52,
+      "real": 48,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 3
+    },
+    {
+      "variant": "A",
+      "case": "H13",
+      "seconds": 45.2,
+      "candidates": 66,
+      "real": 62,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 0
+    }
+  ]
+}
