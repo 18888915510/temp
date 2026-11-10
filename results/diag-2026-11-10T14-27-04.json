@@ -1,0 +1,96 @@
+{
+  "recall": [
+    {
+      "variant": "A",
+      "case": "H5",
+      "hostIsRealGroup": false,
+      "hostConvAnchoredWithHit": true,
+      "expandTotal": 39,
+      "expandInHost": 4,
+      "expandCap": 60,
+      "capReached": false,
+      "expandInHost_realSameNameAsCasePeople": 0,
+      "expandInHost_realMine": 0,
+      "expandInHost_caseMsgs": 4,
+      "realMessagesInHostSinceSeed": 0,
+      "targets": [
+        {
+          "id": "H5-G1-M2",
+          "sender": "赵凯",
+          "inTopK": true,
+          "inExpand": true,
+          "rankOfSegment": 5,
+          "rankedTotal": 182,
+          "senderIsParticipant": false,
+          "found": true
+        },
+        {
+          "id": "H5-G1-M3",
+          "sender": "李娜",
+          "inTopK": true,
+          "inExpand": true,
+          "rankOfSegment": 8,
+          "rankedTotal": 182,
+          "senderIsParticipant": false,
+          "found": true
+        },
+        {
+          "id": "H5-G1-M4",
+          "sender": "当前用户",
+          "inTopK": true,
+          "inExpand": true,
+          "rankOfSegment": 8,
+          "rankedTotal": 182,
+          "senderIsParticipant": false,
+          "found": true
+        }
+      ]
+    },
+    {
+      "variant": "B",
+      "case": "H5",
+      "hostIsRealGroup": true,
+      "hostConvAnchoredWithHit": true,
+      "expandTotal": 41,
+      "expandInHost": 6,
+      "expandCap": 60,
+      "capReached": false,
+      "expandInHost_realSameNameAsCasePeople": 0,
+      "expandInHost_realMine": 0,
+      "expandInHost_caseMsgs": 3,
+      "realMessagesInHostSinceSeed": 221,
+      "targets": [
+        {
+          "id": "H5-G1-M2",
+          "sender": "赵凯",
+          "inTopK": true,
+          "inExpand": true,
+          "rankOfSegment": 7,
+          "rankedTotal": 181,
+          "senderIsParticipant": false,
+          "found": true
+        },
+        {
+          "id": "H5-G1-M3",
+          "sender": "李娜",
+          "inTopK": false,
+          "inExpand": true,
+          "rankOfSegment": 21,
+          "rankedTotal": 181,
+          "senderIsParticipant": false,
+          "found": true
+        },
+        {
+          "id": "H5-G1-M4",
+          "sender": "当前用户",
+          "inTopK": false,
+          "inExpand": false,
+          "rankOfSegment": 21,
+          "rankedTotal": 181,
+          "senderIsParticipant": false,
+          "found": false
+        }
+      ]
+    }
+  ]
+}
