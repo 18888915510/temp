@@ -1,0 +1,910 @@
+{
+  "_说明": {
+    "用途": "第四批新场景验证集（2026-11-10 11:40，在改召回「宁多勿漏」之前写好并提交）。出题方只做标准答案自测，不在其上跑任何召回或模型回归；看过结果后不得据此修改。",
+    "当前用户": "u_wangli（王丽，HRBP）。所有方向判定都以她为视角。",
+    "身份说明": "邮件中使用邮箱地址（部分带英文显示名），聊天中使用 WeLink 昵称，需要通过 people 表把两者对应起来。",
+    "eval_time": "每个用例的评测时间点，用于判断是否逾期；只有 eval_time 之前的消息可见。",
+    "message_labels": "逐条消息的标准答案：matter 为所属事项 ID（null 表示无关），type 为消息作用。",
+    "type 取值": {
+      "seed": "种子邮件",
+      "task_assignment": "布置任务/产生新义务",
+      "deadline_change": "截止日期变更（已生效）",
+      "extension_request": "延期申请（尚未生效）",
+      "extension_approved": "延期获批（生效）",
+      "requirement": "补充要求",
+      "question": "提问（本身不改变事项）",
+      "ack": "收到/确认，无新信息",
+      "delivery": "交付",
+      "delivery_by_others": "他人之间的交付（当前用户只是知会）",
+      "cancel": "取消（整体或部分）",
+      "meeting": "与事项相关的会议安排，不改变截止日期",
+      "not_applicable_to_user": "与事项相关，但只针对其他人，不影响当前用户",
+      "irrelevant": "无关消息（干扰项）"
+    },
+    "交付状态取值": [
+      "pending",
+      "delivered",
+      "overdue",
+      "cancelled"
+    ],
+    "方向取值": {
+      "inbound": "谁还要交给我",
+      "outbound": "我要交给谁",
+      "relay": "中转：先从上游收，再交给下游",
+      "cc_only": "仅知会，不进入主列表",
+      "self": "我自己要完成（无明确交付对象，如考试、填报系统）"
+    },
+    "distribution_lists": "邮件组地址及其成员。群发给邮件组时，需要展开成员，逐人跟踪。",
+    "补充 type": {
+      "nil_delivery": "回复“无/没有”，视为已完成",
+      "unconfirmed_info": "未经确认的传闻，不能直接作为要求生效",
+      "info_confirmed": "对传闻的确认，此时要求才生效"
+    },
+    "补充状态": "paused：事项被叫停、等通知（2026-11-10 用户确认新增）",
+    "补充 type（2026-11-10）": {
+      "pause": "叫停 / 暂停，等通知"
+    }
+  },
+  "people": [
+    {
+      "id": "u_wangli",
+      "name": "王丽",
+      "email": "wangli@corp.example",
+      "welink_name": "王丽",
+      "role": "HRBP（当前用户）"
+    },
+    {
+      "id": "p_zhangwei",
+      "name": "张伟",
+      "email": "zhangwei@corp.example",
+      "welink_name": "张伟",
+      "role": "研发一部主管"
+    },
+    {
+      "id": "p_lina",
+      "name": "李娜",
+      "email": "lina@corp.example",
+      "welink_name": "李娜",
+      "role": "研发二部主管"
+    },
+    {
+      "id": "p_chenming",
+      "name": "陈明",
+      "email": "chenming@corp.example",
+      "welink_name": "陈明",
+      "aliases": [
+        "陈总"
+      ],
+      "role": "HR 总监"
+    },
+    {
+      "id": "p_zhaokai",
+      "name": "赵凯",
+      "email": "kevin.zhao@corp.example",
+      "email_display_name": "Kevin Zhao",
+      "welink_name": "赵凯",
+      "role": "研发三部主管"
+    },
+    {
+      "id": "p_liuyang",
+      "name": "刘洋",
+      "email": "liuyang@corp.example",
+      "welink_name": "刘洋",
+      "role": "招聘负责人"
+    },
+    {
+      "id": "p_sunhua",
+      "name": "孙华",
+      "email": "sunhua@corp.example",
+      "welink_name": "孙华",
+      "role": "财务 BP"
+    },
+    {
+      "id": "p_zhouting",
+      "name": "周婷",
+      "email": "zhouting@corp.example",
+      "welink_name": "周婷",
+      "role": "HRBP（另一产线）"
+    },
+    {
+      "id": "p_wuqiang",
+      "name": "吴强",
+      "email": "wuqiang@corp.example",
+      "welink_name": "吴强",
+      "role": "研发四部主管"
+    },
+    {
+      "id": "p_zhengfang",
+      "name": "郑芳",
+      "email": "zhengfang@corp.example",
+      "welink_name": "郑芳",
+      "role": "研发五部主管"
+    },
+    {
+      "id": "p_huanglei",
+      "name": "黄磊",
+      "email": "huanglei@corp.example",
+      "welink_name": "黄磊",
+      "role": "研发六部主管"
+    },
+    {
+      "id": "p_qianli",
+      "name": "钱莉",
+      "email": "qianli@corp.example",
+      "welink_name": "钱莉",
+      "role": "研发一部秘书（替张伟处理行政事务）"
+    }
+  ],
+  "distribution_lists": [
+    {
+      "address": "rd-managers@corp.example",
+      "display_name": "研发主管",
+      "members": [
+        "p_zhangwei",
+        "p_lina",
+        "p_zhaokai",
+        "p_wuqiang",
+        "p_zhengfang",
+        "p_huanglei"
+      ]
+    },
+    {
+      "address": "all@corp.example",
+      "display_name": "全体员工",
+      "members": "全体（成员过多，不展开）"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "H11",
+      "title": "领导一封邮件布置三件事（交给我、自己做、先收再交）",
+      "test_points": [
+        "一封邮件拆成三件：离职率分析（交给陈明）、调薪录入（自己完成）、调薪名单（先向主管收、再交陈明）",
+        "领导私聊推迟分析的截止，只影响分析这一件",
+        "中转的上游截止在群里定",
+        "上游有人已确认、有人未到期"
+      ],
+      "seed_email_id": "H11-E1",
+      "eval_time": "2026-11-24T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "H11-E1",
+          "from": "陈明 <chenming@corp.example>",
+          "to": [
+            "wangli@corp.example"
+          ],
+          "cc": [],
+          "sent_at": "2026-11-16T09:00:00+08:00",
+          "subject": "本月几件事",
+          "body": "王丽：\n\n1. 本周五前把研发Q4离职率分析发我；\n2. 下周三前在薪酬系统里完成研发年度调薪录入；\n3. 调薪名单请各部门主管确认，11月27日前汇总给我。\n\n陈明",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "H11-G1",
+          "name": "研发人力沟通",
+          "members": [
+            "王丽",
+            "张伟",
+            "李娜"
+          ],
+          "messages": [
+            {
+              "msg_id": "H11-G1-M1",
+              "sender": "王丽",
+              "sent_at": "2026-11-17T09:30:00+08:00",
+              "text": "@张伟 @李娜 调薪名单请11月24日前确认给我",
+              "mentions": [
+                "张伟",
+                "李娜"
+              ]
+            },
+            {
+              "msg_id": "H11-G1-M2",
+              "sender": "张伟",
+              "sent_at": "2026-11-18T11:00:00+08:00",
+              "text": "研发一部调薪名单确认无误"
+            },
+            {
+              "msg_id": "H11-G1-M3",
+              "sender": "李娜",
+              "sent_at": "2026-11-18T11:30:00+08:00",
+              "text": "今天下午的周会取消了"
+            }
+          ]
+        }
+      ],
+      "dms": [
+        {
+          "dm_id": "H11-DM1",
+          "peer": "陈明",
+          "messages": [
+            {
+              "msg_id": "H11-DM1-M1",
+              "sender": "陈明",
+              "sent_at": "2026-11-18T17:00:00+08:00",
+              "text": "离职率分析不急，下周一给我就行"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "研发 Q4 离职率分析",
+            "direction": "outbound",
+            "deliverable": "离职率分析",
+            "counterparties": [
+              {
+                "person": "p_chenming",
+                "status": "pending",
+                "evidence": []
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-23",
+              "history": [
+                {
+                  "value": "2026-11-20",
+                  "source": "H11-E1"
+                },
+                {
+                  "value": "2026-11-23",
+                  "source": "H11-DM1-M1"
+                }
+              ]
+            },
+            "requirements": [
+              {
+                "text": "研发 Q4 离职率分析",
+                "source": "H11-E1"
+              }
+            ],
+            "conflicts": [
+              {
+                "description": "邮件截止 11/20，领导私聊推迟到 11/23",
+                "adopted": "H11-DM1-M1",
+                "reason": "接收方本人推迟"
+              }
+            ]
+          },
+          {
+            "matter_id": "M2",
+            "title": "薪酬系统录入年度调薪",
+            "direction": "self",
+            "deliverable": "在薪酬系统完成调薪录入",
+            "counterparties": [],
+            "deadline": {
+              "current": "2026-11-25",
+              "history": [
+                {
+                  "value": "2026-11-25",
+                  "source": "H11-E1"
+                }
+              ]
+            },
+            "requirements": [
+              {
+                "text": "在薪酬系统完成研发年度调薪录入",
+                "source": "H11-E1"
+              }
+            ],
+            "conflicts": []
+          },
+          {
+            "matter_id": "M3",
+            "title": "调薪名单确认与汇总",
+            "direction": "relay",
+            "deliverable": "各部门确认的调薪名单（上游）→ 汇总（下游陈明）",
+            "upstream": {
+              "counterparties": [
+                {
+                  "person": "p_zhangwei",
+                  "status": "delivered",
+                  "evidence": [
+                    "H11-G1-M2"
+                  ]
+                },
+                {
+                  "person": "p_lina",
+                  "status": "pending",
+                  "evidence": []
+                }
+              ],
+              "deadline": {
+                "current": "2026-11-24",
+                "history": [
+                  {
+                    "value": "2026-11-24",
+                    "source": "H11-G1-M1"
+                  }
+                ]
+              }
+            },
+            "downstream": {
+              "counterparties": [
+                {
+                  "person": "p_chenming",
+                  "status": "pending",
+                  "evidence": []
+                }
+              ],
+              "deadline": {
+                "current": "2026-11-27",
+                "history": [
+                  {
+                    "value": "2026-11-27",
+                    "source": "H11-E1"
+                  }
+                ]
+              }
+            },
+            "requirements": [
+              {
+                "text": "各部门主管确认调薪名单",
+                "source": "H11-E1"
+              }
+            ],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {
+            "msg_id": "H11-E1",
+            "matter": [
+              "M1",
+              "M2",
+              "M3"
+            ],
+            "type": "seed"
+          },
+          {
+            "msg_id": "H11-G1-M1",
+            "matter": "M3",
+            "type": "task_assignment"
+          },
+          {
+            "msg_id": "H11-G1-M2",
+            "matter": "M3",
+            "type": "delivery"
+          },
+          {
+            "msg_id": "H11-G1-M3",
+            "matter": null,
+            "type": "irrelevant"
+          },
+          {
+            "msg_id": "H11-DM1-M1",
+            "matter": "M1",
+            "type": "deadline_change"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "H12",
+      "title": "面试官名单（我只在抄送，群里派给我一件自己做的事）",
+      "test_points": [
+        "当前用户只在抄送：知会事项",
+        "群里 @当前用户派生出新事项，是自己组织培训（self），不是交给谁",
+        "别人之间的交付只更新知会事项"
+      ],
+      "seed_email_id": "H12-E1",
+      "eval_time": "2026-11-23T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "H12-E1",
+          "from": "刘洋 <liuyang@corp.example>",
+          "to": [
+            "zhangwei@corp.example"
+          ],
+          "cc": [
+            "wangli@corp.example"
+          ],
+          "sent_at": "2026-11-16T15:00:00+08:00",
+          "subject": "2027校招面试官名单",
+          "body": "张伟好：\n\n请于11月20日前提交研发一部2027校招面试官名单。\n\n刘洋",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "H12-G1",
+          "name": "校招协同",
+          "members": [
+            "刘洋",
+            "王丽",
+            "张伟"
+          ],
+          "messages": [
+            {
+              "msg_id": "H12-G1-M1",
+              "sender": "刘洋",
+              "sent_at": "2026-11-17T10:00:00+08:00",
+              "text": "@王丽 面试官名单出来后，麻烦你组织一次面试官培训，12月1日前办完",
+              "mentions": [
+                "王丽"
+              ]
+            },
+            {
+              "msg_id": "H12-G1-M2",
+              "sender": "王丽",
+              "sent_at": "2026-11-17T10:10:00+08:00",
+              "text": "好的"
+            },
+            {
+              "msg_id": "H12-G1-M3",
+              "sender": "张伟",
+              "sent_at": "2026-11-19T16:00:00+08:00",
+              "text": "面试官名单已经发刘洋邮箱了"
+            }
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "研发一部面试官名单",
+            "direction": "cc_only",
+            "deliverable": "面试官名单（张伟交给刘洋）",
+            "counterparties": [
+              {
+                "person": "p_zhangwei",
+                "status": "delivered",
+                "evidence": [
+                  "H12-G1-M3"
+                ]
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-20",
+              "history": [
+                {
+                  "value": "2026-11-20",
+                  "source": "H12-E1"
+                }
+              ]
+            },
+            "requirements": [],
+            "conflicts": []
+          },
+          {
+            "matter_id": "M2",
+            "title": "组织面试官培训",
+            "direction": "self",
+            "deliverable": "办完一次面试官培训",
+            "counterparties": [],
+            "deadline": {
+              "current": "2026-12-01",
+              "history": [
+                {
+                  "value": "2026-12-01",
+                  "source": "H12-G1-M1"
+                }
+              ]
+            },
+            "requirements": [],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {
+            "msg_id": "H12-E1",
+            "matter": "M1",
+            "type": "seed"
+          },
+          {
+            "msg_id": "H12-G1-M1",
+            "matter": "M2",
+            "type": "task_assignment"
+          },
+          {
+            "msg_id": "H12-G1-M2",
+            "matter": "M2",
+            "type": "ack"
+          },
+          {
+            "msg_id": "H12-G1-M3",
+            "matter": "M1",
+            "type": "delivery_by_others"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "H13",
+      "title": "团建报销单据（只交一半不算交齐）",
+      "test_points": [
+        "先交明细、发票说明天补，交齐之前不算已交",
+        "补交后算已交",
+        "群里的补充要求",
+        "没交的到期判逾期"
+      ],
+      "seed_email_id": "H13-E1",
+      "eval_time": "2026-11-23T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "H13-E1",
+          "from": "王丽 <wangli@corp.example>",
+          "to": [
+            "zhangwei@corp.example",
+            "lina@corp.example",
+            "Kevin Zhao <kevin.zhao@corp.example>"
+          ],
+          "cc": [],
+          "sent_at": "2026-11-16T10:00:00+08:00",
+          "subject": "【请提交】Q4团建费用报销单据",
+          "body": "各位：\n\n请于11月20日前提交本部门Q4团建报销单据：发票照片和费用明细表，两样都要。\n\n王丽",
+          "attachments": [
+            "费用明细表模板.xlsx"
+          ]
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "H13-G1",
+          "name": "研发主管沟通群",
+          "members": [
+            "王丽",
+            "张伟",
+            "李娜",
+            "赵凯"
+          ],
+          "messages": [
+            {
+              "msg_id": "H13-G1-M1",
+              "sender": "赵凯",
+              "sent_at": "2026-11-17T14:00:00+08:00",
+              "text": "发票丢了一张，可以只交明细吗"
+            },
+            {
+              "msg_id": "H13-G1-M2",
+              "sender": "王丽",
+              "sent_at": "2026-11-17T14:20:00+08:00",
+              "text": "不行，丢了的那张找财务开遗失证明一起交"
+            }
+          ]
+        }
+      ],
+      "dms": [
+        {
+          "dm_id": "H13-DM1",
+          "peer": "李娜",
+          "messages": [
+            {
+              "msg_id": "H13-DM1-M1",
+              "sender": "李娜",
+              "sent_at": "2026-11-18T10:00:00+08:00",
+              "text": "明细表先发你，发票明天补",
+              "attachments": [
+                "研发二部团建明细.xlsx"
+              ]
+            },
+            {
+              "msg_id": "H13-DM1-M2",
+              "sender": "李娜",
+              "sent_at": "2026-11-19T09:30:00+08:00",
+              "text": "发票照片补上了",
+              "attachments": [
+                "研发二部发票.zip"
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "Q4 团建报销单据",
+            "direction": "inbound",
+            "deliverable": "发票照片 + 费用明细表",
+            "counterparties": [
+              {
+                "person": "p_zhangwei",
+                "status": "overdue",
+                "evidence": []
+              },
+              {
+                "person": "p_lina",
+                "status": "delivered",
+                "evidence": [
+                  "H13-DM1-M1",
+                  "H13-DM1-M2"
+                ]
+              },
+              {
+                "person": "p_zhaokai",
+                "status": "overdue",
+                "evidence": []
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-20",
+              "history": [
+                {
+                  "value": "2026-11-20",
+                  "source": "H13-E1"
+                }
+              ]
+            },
+            "requirements": [
+              {
+                "text": "发票照片和费用明细表都要",
+                "source": "H13-E1"
+              },
+              {
+                "text": "发票丢失的找财务开遗失证明一起交",
+                "source": "H13-G1-M2"
+              }
+            ],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {
+            "msg_id": "H13-E1",
+            "matter": "M1",
+            "type": "seed"
+          },
+          {
+            "msg_id": "H13-G1-M1",
+            "matter": "M1",
+            "type": "question"
+          },
+          {
+            "msg_id": "H13-G1-M2",
+            "matter": "M1",
+            "type": "requirement"
+          },
+          {
+            "msg_id": "H13-DM1-M1",
+            "matter": "M1",
+            "type": "delivery"
+          },
+          {
+            "msg_id": "H13-DM1-M2",
+            "matter": "M1",
+            "type": "delivery"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "H14",
+      "title": "编制数据（同事传话改截止，不算数）",
+      "test_points": [
+        "同事听说截止提前，没有得到发起人确认，不改截止",
+        "发起人后来补充格式要求",
+        "还没到期，状态是待交付"
+      ],
+      "seed_email_id": "H14-E1",
+      "eval_time": "2026-11-21T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "H14-E1",
+          "from": "孙华 <sunhua@corp.example>",
+          "to": [
+            "wangli@corp.example"
+          ],
+          "cc": [],
+          "sent_at": "2026-11-16T16:00:00+08:00",
+          "subject": "研发2027编制数据",
+          "body": "王丽：\n\n请于11月25日前提供研发2027年编制数据（人数、职级）。\n\n孙华",
+          "attachments": []
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "H14-G1",
+          "name": "预算编制沟通",
+          "members": [
+            "孙华",
+            "王丽",
+            "周婷"
+          ],
+          "messages": [
+            {
+              "msg_id": "H14-G1-M1",
+              "sender": "周婷",
+              "sent_at": "2026-11-18T09:00:00+08:00",
+              "text": "听说编制数据的截止提前到20号了？"
+            },
+            {
+              "msg_id": "H14-G1-M2",
+              "sender": "孙华",
+              "sent_at": "2026-11-19T15:00:00+08:00",
+              "text": "编制数据请按季度拆开填"
+            }
+          ]
+        }
+      ],
+      "dms": [],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "研发 2027 编制数据",
+            "direction": "outbound",
+            "deliverable": "编制数据（人数、职级）",
+            "counterparties": [
+              {
+                "person": "p_sunhua",
+                "status": "pending",
+                "evidence": []
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-25",
+              "history": [
+                {
+                  "value": "2026-11-25",
+                  "source": "H14-E1"
+                }
+              ]
+            },
+            "requirements": [
+              {
+                "text": "包含人数、职级",
+                "source": "H14-E1"
+              },
+              {
+                "text": "按季度拆开填",
+                "source": "H14-G1-M2"
+              }
+            ],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {
+            "msg_id": "H14-E1",
+            "matter": "M1",
+            "type": "seed"
+          },
+          {
+            "msg_id": "H14-G1-M1",
+            "matter": "M1",
+            "type": "unconfirmed_info"
+          },
+          {
+            "msg_id": "H14-G1-M2",
+            "matter": "M1",
+            "type": "requirement"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "H15",
+      "title": "HC 盘点和关键人才清单（两件事取消一件）",
+      "test_points": [
+        "一封邮件拆成两件，都交给陈明",
+        "领导说其中一件不用做了，只取消那一件",
+        "另一件照常待交付"
+      ],
+      "seed_email_id": "H15-E1",
+      "eval_time": "2026-11-19T10:00:00+08:00",
+      "emails": [
+        {
+          "msg_id": "H15-E1",
+          "from": "陈明 <chenming@corp.example>",
+          "to": [
+            "wangli@corp.example"
+          ],
+          "cc": [],
+          "sent_at": "2026-11-16T09:30:00+08:00",
+          "subject": "研发HC盘点与关键人才",
+          "body": "王丽：\n\n1. 11月20日前提交研发HC盘点表；\n2. 11月27日前提交研发关键人才清单。\n\n陈明",
+          "attachments": [
+            "HC盘点模板.xlsx"
+          ]
+        }
+      ],
+      "groups": [],
+      "dms": [
+        {
+          "dm_id": "H15-DM1",
+          "peer": "陈明",
+          "messages": [
+            {
+              "msg_id": "H15-DM1-M1",
+              "sender": "陈明",
+              "sent_at": "2026-11-17T18:00:00+08:00",
+              "text": "关键人才清单不用做了，集团统一出"
+            },
+            {
+              "msg_id": "H15-DM1-M2",
+              "sender": "陈明",
+              "sent_at": "2026-11-18T09:00:00+08:00",
+              "text": "明天的周会挪到下午"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "matters": [
+          {
+            "matter_id": "M1",
+            "title": "研发 HC 盘点表",
+            "direction": "outbound",
+            "deliverable": "HC 盘点表",
+            "counterparties": [
+              {
+                "person": "p_chenming",
+                "status": "pending",
+                "evidence": []
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-20",
+              "history": [
+                {
+                  "value": "2026-11-20",
+                  "source": "H15-E1"
+                }
+              ]
+            },
+            "requirements": [
+              {
+                "text": "按附件模板填写",
+                "source": "H15-E1"
+              }
+            ],
+            "conflicts": []
+          },
+          {
+            "matter_id": "M2",
+            "title": "研发关键人才清单",
+            "direction": "outbound",
+            "deliverable": "关键人才清单",
+            "counterparties": [
+              {
+                "person": "p_chenming",
+                "status": "cancelled",
+                "evidence": [
+                  "H15-DM1-M1"
+                ]
+              }
+            ],
+            "deadline": {
+              "current": "2026-11-27",
+              "history": [
+                {
+                  "value": "2026-11-27",
+                  "source": "H15-E1"
+                }
+              ]
+            },
+            "requirements": [],
+            "conflicts": []
+          }
+        ],
+        "message_labels": [
+          {
+            "msg_id": "H15-E1",
+            "matter": [
+              "M1",
+              "M2"
+            ],
+            "type": "seed"
+          },
+          {
+            "msg_id": "H15-DM1-M1",
+            "matter": "M2",
+            "type": "cancel"
+          },
+          {
+            "msg_id": "H15-DM1-M2",
+            "matter": null,
+            "type": "irrelevant"
+          }
+        ]
+      }
+    }
+  ]
+}
