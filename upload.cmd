@@ -6,7 +6,7 @@ set "LATEST="
 for /f "delims=" %%d in ('dir /b /ad /o-d e2e-* recall-* result-* 2^>nul') do if not defined LATEST set "LATEST=%%d"
 if not defined LATEST (
   echo 没找到结果文件夹，请先运行 run-recall.cmd 或 run.cmd
-  pause
+  if not defined NOPAUSE pause
   exit /b 1
 )
 if not exist results mkdir results
@@ -21,4 +21,4 @@ if errorlevel 1 (
 ) else (
   echo 已上传 %LATEST%
 )
-pause
+if not defined NOPAUSE pause
