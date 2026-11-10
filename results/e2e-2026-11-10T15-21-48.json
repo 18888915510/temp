@@ -1,0 +1,67 @@
+{
+  "at": "2026-11-10T07:31:55.835Z",
+  "model": "deepseek-v4.1-flash-1017",
+  "cli": "codeagent",
+  "K": 20,
+  "variants": [
+    "A",
+    "B"
+  ],
+  "realMessages": 4240,
+  "byVariant": {
+    "A": {
+      "metrics": {},
+      "avgCandidates": 52,
+      "avgReal": 48,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 301,
+      "maxSeconds": 301,
+      "maxCandidates": 52,
+      "failed": [
+        "H11"
+      ]
+    },
+    "B": {
+      "metrics": {},
+      "avgCandidates": 54,
+      "avgReal": 50,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 300.9,
+      "maxSeconds": 300.9,
+      "maxCandidates": 54,
+      "failed": [
+        "H11"
+      ]
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "H11",
+      "seconds": 301,
+      "candidates": 52,
+      "real": 48,
+      "json": false,
+      "missedByRecall": [],
+      "misLinked": null,
+      "extraFromNoise": null,
+      "wrong": 0
+    },
+    {
+      "variant": "B",
+      "case": "H11",
+      "seconds": 300.9,
+      "candidates": 54,
+      "real": 50,
+      "json": false,
+      "missedByRecall": [],
+      "misLinked": null,
+      "extraFromNoise": null,
+      "wrong": 0
+    }
+  ]
+}
