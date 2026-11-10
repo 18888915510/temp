@@ -82,6 +82,7 @@ async function main() {
         const e = c.emails.find(x => x.msg_id === sid);
         const r = R.recall(e, pool, idf, until, 'anchor');
         for (const id of r.mails) picked.add(id);
+        for (const id of r.expand || []) picked.add(id);
         for (const w of r.ranked.slice(0, K)) for (const m of w.seg) picked.add(m.id);
       }
       const cands = pool.filter(m => picked.has(m.id));
@@ -120,10 +121,10 @@ async function main() {
     const agg = { metrics: Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, { ok: v.ok, all: v.all }])),
       avgCandidates: +(xs.reduce((a, x) => a + x.cands, 0) / xs.length).toFixed(1), avgReal: +(xs.reduce((a, x) => a + x.real, 0) / xs.length).toFixed(1),
       missedByRecall: xs.reduce((a, x) => a + x.missedByRecall.length, 0), misLinked: scored.reduce((a, x) => a + x.misLinked, 0),
-      extraFromNoise: scored.reduce((a, x) => a + x.extraFromNoise, 0), avgSeconds: +(xs.reduce((a, x) => a + x.res.wallS, 0) / xs.length).toFixed(1),
+      extraFromNoise: scored.reduce((a, x) => a + x.extraFromNoise, 0), avgSeconds: +(xs.reduce((a, x) => a + x.res.wallS, 0) / xs.length).toFixed(1), maxSeconds: Math.max(...xs.map(x => x.res.wallS)), maxCandidates: Math.max(...xs.map(x => x.cands)),
       failed: xs.filter(x => !x.out).map(x => x.c.case_id) };
     summary.byVariant[variant] = agg;
-    L.push(`## 难度 ${variant}`, '', `平均候选 ${agg.avgCandidates} 条（其中真实消息 ${agg.avgReal} 条）· 平均耗时 ${agg.avgSeconds} 秒`,
+    L.push(`## 难度 ${variant}`, '', `平均候选 ${agg.avgCandidates} 条（其中真实消息 ${agg.avgReal} 条，最多一次 ${agg.maxCandidates} 条）· 平均耗时 ${agg.avgSeconds} 秒，最长 ${agg.maxSeconds} 秒（验收线 180 秒）${agg.maxSeconds > 180 ? ' ⚠ 超过 3 分钟' : ''}`,
       `召回漏掉相关消息 ${agg.missedByRecall} 条 · 误挂真实消息 ${agg.misLinked} 条 · 完全由真实消息生成的多余事项 ${agg.extraFromNoise} 个${agg.failed.length ? ` · 没拿到有效 JSON：${agg.failed.join('、')}` : ''}`, '',
       '| 指标 | 正确率 | 对/总 |', '|---|---|---|');
     for (const [k, v] of Object.entries(tot)) L.push(`| ${k === '消息作用' ? k + '（次要，不改变卡片）' : k} | ${rate(v)} | ${v.ok}/${v.all} |`);
