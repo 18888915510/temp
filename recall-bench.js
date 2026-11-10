@@ -25,7 +25,8 @@ const KS = String(opt('k', '3,5,10,20')).split(',').map(Number).filter(n => n > 
 const GAP = Number(opt('gap-minutes', 60)) * 60000; // 同一会话里，间隔超过这么久就切成新的一段
 // 上下文：回复和补充多在锚点之后，所以前面少带、后面多带。
 const CTX_BEFORE = Number(opt('ctx-before', 2)), CTX_AFTER = Number(opt('ctx-after', 6)), CTX_BEFORE_MIN = Number(opt('ctx-before-minutes', 15)) * 60000, CTX_AFTER_MIN = Number(opt('ctx-after-minutes', 60)) * 60000, PERSON_ONLY = Number(opt('person-only', 0.8)), AT_ME = Number(opt('at-me', 3));
-const EXPAND = opt('expand', 'on') !== 'off', EXPAND_K = Number(opt('expand-k', 20)), EXPAND_CAP = Number(opt('expand-cap', 60)), EXPAND_NEXT = Number(opt('expand-next', 1));
+const EXPAND = opt('expand', 'on') !== 'off', EXPAND_K = Number(opt('expand-k', 20)), EXPAND_CAP = Number(opt('expand-cap', 60)), EXPAND_NEXT = Number(opt('expand-next', 1)),
+  REPLY_MIN = Number(opt('reply-minutes', 120)) * 60000, REPLY_N = Number(opt('reply-n', 2));
 const FOLLOW = Number(opt('follow', 4)), FOLLOW_N = Number(opt('follow-n', 3)), FOLLOW_DAYS = Number(opt('follow-days', 7)) * 86400000;
 const MODES = String(opt('modes', 'segment,anchor')).split(',');
 const NAME_CAP = Number(opt('name-cap', 6)), MIN_HIT = Number(opt('min-hit', 2)), FLOOR = Number(opt('floor', 0.4));
@@ -237,6 +238,13 @@ function expandByPeople(ranked, byConv, people, seedAt) {
       const keep = who.has(m.sender) || (m.mine && (m.mentions || []).some(x => who.has(x)));
       if (!keep) continue;
       for (const k of list.slice(i, i + 1 + EXPAND_NEXT)) if (!out.has(k.id)) { out.add(k.id); n++; }
+      // 当前用户的回复（2026-11-10 诊断后）：别人提问或请求之后，当前用户在 REPLY_MIN 分钟内的头 REPLY_N 条发言一并收进。
+      // 真实大群里中间常插进别人的消息，「下一条」接不住这种回复（H5 只限正式员工、H10 填 0 也要交表、C5 体检可以 13 号）。
+      if (!m.mine) {
+        let r = 0;
+        for (let j = i + 1; j < list.length && list[j].at - m.at <= REPLY_MIN && r < REPLY_N; j++)
+          if (list[j].mine) { r++; if (!out.has(list[j].id)) { out.add(list[j].id); n++; } }
+      }
     }
   }
   return out;
@@ -316,7 +324,7 @@ function main() {
   const overall = [];
   for (const mode of MODES) for (const v of ['A', 'B']) for (const K of KS) { const a = agg(mode, v, K); if (a) overall.push(a); }
   const summary = { at: new Date().toISOString(), snapshots: snap.files.length, realMessages: snap.messages.length, realConversations: snap.convs.length,
-    realGroups: realGroups.length, settings: { modes: MODES, ctxBefore: CTX_BEFORE, ctxAfter: CTX_AFTER, ctxBeforeMin: CTX_BEFORE_MIN / 60000, ctxAfterMin: CTX_AFTER_MIN / 60000, expand: EXPAND, expandK: EXPAND_K, expandCap: EXPAND_CAP, expandNext: EXPAND_NEXT, personOnly: PERSON_ONLY, atMe: AT_ME, follow: FOLLOW, followN: FOLLOW_N, followDays: FOLLOW_DAYS / 86400000, nameCap: NAME_CAP, minHit: MIN_HIT, floor: FLOOR, days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
+    realGroups: realGroups.length, settings: { modes: MODES, ctxBefore: CTX_BEFORE, ctxAfter: CTX_AFTER, ctxBeforeMin: CTX_BEFORE_MIN / 60000, ctxAfterMin: CTX_AFTER_MIN / 60000, expand: EXPAND, expandK: EXPAND_K, expandCap: EXPAND_CAP, expandNext: EXPAND_NEXT, replyMinutes: REPLY_MIN / 60000, replyN: REPLY_N, personOnly: PERSON_ONLY, atMe: AT_ME, follow: FOLLOW, followN: FOLLOW_N, followDays: FOLLOW_DAYS / 86400000, nameCap: NAME_CAP, minHit: MIN_HIT, floor: FLOOR, days: DAYS, gapMinutes: GAP / 60000, lookbackDays: LOOKBACK / 86400000, K: KS }, overall,
     perCase: final.map(({ missed, ...r }) => ({ ...r, missed: missed.map(m => m.id) })) };
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
 
