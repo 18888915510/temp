@@ -1,0 +1,77 @@
+{
+  "at": "2026-11-10T09:28:31.398Z",
+  "model": "GLM-5.2-WX-Auto",
+  "cli": "codeagent",
+  "effort": "default",
+  "effortApplied": false,
+  "K": 20,
+  "variants": [
+    "A"
+  ],
+  "realMessages": 4382,
+  "byVariant": {
+    "A": {
+      "metrics": {
+        "事项数量": {
+          "ok": 1,
+          "all": 1
+        },
+        "消息归属": {
+          "ok": 5,
+          "all": 5
+        },
+        "消息作用": {
+          "ok": 4,
+          "all": 5
+        },
+        "事项识别": {
+          "ok": 3,
+          "all": 3
+        },
+        "方向": {
+          "ok": 3,
+          "all": 3
+        },
+        "截止日期": {
+          "ok": 4,
+          "all": 4
+        },
+        "对方状态": {
+          "ok": 4,
+          "all": 5
+        },
+        "最新要求（出处）": {
+          "ok": 3,
+          "all": 3
+        },
+        "冲突提示": {
+          "ok": 1,
+          "all": 1
+        }
+      },
+      "avgCandidates": 52,
+      "avgReal": 48,
+      "missedByRecall": 0,
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "avgSeconds": 141.3,
+      "maxSeconds": 141.3,
+      "maxCandidates": 52,
+      "failed": []
+    }
+  },
+  "perCase": [
+    {
+      "variant": "A",
+      "case": "H11",
+      "seconds": 141.3,
+      "candidates": 52,
+      "real": 48,
+      "json": true,
+      "missedByRecall": [],
+      "misLinked": 0,
+      "extraFromNoise": 0,
+      "wrong": 2
+    }
+  ]
+}
