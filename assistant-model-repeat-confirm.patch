@@ -1,0 +1,290 @@
+From 5d7c26c7590f279a79aaf75bbf0008fd6e2e8bc0 Mon Sep 17 00:00:00 2001
+From: 18888915510 <18888915510@163.com>
+Date: Thu, 12 Nov 2026 16:17:44 +0800
+Subject: [PATCH] =?UTF-8?q?=E5=8A=A9=E7=90=86=E9=97=AE=E7=AD=94=EF=BC=9A?=
+ =?UTF-8?q?=E7=A1=AE=E8=AE=A4=E6=8D=A2=E6=A8=A1=E5=9E=8B=E5=90=8E=E6=96=B0?=
+ =?UTF-8?q?=E4=BC=9A=E8=AF=9D=E6=B2=BF=E7=94=A8=E6=96=B0=E6=A8=A1=E5=9E=8B?=
+ =?UTF-8?q?=EF=BC=8C=E9=A2=84=E5=BC=80=E4=BC=9A=E8=AF=9D=E4=B8=8D=E5=86=8D?=
+ =?UTF-8?q?=E5=BC=B9=E6=A1=86?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+自动会话按「账号即模型」不改号的默认模型，助理每问开一个新会话，
+新会话又按原模型起、选不上、停下来再问，确认框反复弹出。
+
+- 确认框里换模型成功时按号记下「原模型 → 新模型」（codeagent-model-replacements.json），
+  只写 Hub 数据目录，不改 CodeAgent 的 settings.json
+- 自动会话启动时有替代记录且新模型仍在清单里，直接用新模型起
+- 自动会话启动时选不上原模型只标成待确认，不弹框、不发常驻提示；发问题时再问一次
+- 助理取预开会话时，停在待确认模型的关掉另开
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QfSmuWvjT6iQzDZyNjsKXn
+---
+ core/codeagent-launch-model.js                | 44 +++++++++-
+ core/company-assistant/service.js             |  5 +-
+ core/session-manager.js                       | 17 +++-
+ main/ipc/session-handlers.js                  | 16 +++-
+ ...nit-company-assistant-session-pool.test.js | 17 ++++
+ tests/unit-session-model-pin.test.js          | 83 +++++++++++++++++++
+ 6 files changed, 178 insertions(+), 4 deletions(-)
+
+diff --git a/core/codeagent-launch-model.js b/core/codeagent-launch-model.js
+index d4d2ad7..f3d3b63 100644
+--- a/core/codeagent-launch-model.js
++++ b/core/codeagent-launch-model.js
+@@ -67,4 +67,46 @@ function recheckLaunchChoice({ dataDir, configDir, accountKey = 'personal', firs
+     current, currentNewer: settingsAt > last.at, last: last.model, first });
+ }
+ 
+-module.exports = { FILE, lastModel, lastEntry, rememberModel, chooseLaunchModel, recheckLaunchChoice };
++// 自动会话的模型替代（2026-11-12 用户报：助理问答点了「确认切换并继续」还是不断弹框）：
++// 自动会话按「账号即模型」不改号的默认模型，而助理每问开一个新会话，新会话又按原模型起、又停下来问。
++// 用户在确认框里把原模型换成新模型后，按号记下「原模型 → 新模型」；之后这个号的自动会话要用原模型时直接用新模型。
++// 只写 Hub 数据目录，不碰 CodeAgent 的 settings.json。新模型已不在权威清单里时不用（回到正常确认）。
++// 文件：codeagent-model-replacements.json：{ "<号 id 或 personal>": { "<原模型小写>": { from, to, at } } }。
++const REPLACEMENTS_FILE = 'codeagent-model-replacements.json';
++
++function readReplacements(dataDir) {
++  try {
++    const data = JSON.parse(fs.readFileSync(path.join(dataDir, REPLACEMENTS_FILE), 'utf8'));
++    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
++  } catch { return {}; }
++}
++
++function rememberReplacement(dataDir, account, from, to, now = Date.now()) {
++  if (!dataDir || !from || !to || eq(from, to)) return false;
++  const all = readReplacements(dataDir);
++  const key = String(account || 'personal');
++  const rows = all[key] && typeof all[key] === 'object' && !Array.isArray(all[key]) ? all[key] : {};
++  rows[String(from).toLowerCase()] = { from: String(from), to: String(to), at: new Date(now).toISOString() };
++  // 新模型自己若也被记成过「要换掉」，那条作废：用户刚明确选了它。
++  delete rows[String(to).toLowerCase()];
++  all[key] = rows;
++  const file = path.join(dataDir, REPLACEMENTS_FILE), tmp = file + '.tmp';
++  fs.mkdirSync(dataDir, { recursive: true });
++  fs.writeFileSync(tmp, JSON.stringify(all, null, 2) + '\n', 'utf8');
++  fs.renameSync(tmp, file);
++  return true;
++}
++
++// 返回该用的替代模型，没有返回 ''。known：{ models, authoritative }；清单权威时替代模型必须在清单里。
++function replacementFor(dataDir, account, model, known = null) {
++  if (!dataDir || !model) return '';
++  const rows = readReplacements(dataDir)[String(account || 'personal')];
++  const row = rows && typeof rows === 'object' ? rows[String(model).toLowerCase()] : null;
++  const to = row && typeof row.to === 'string' ? row.to.trim() : '';
++  if (!to || eq(to, model) || !require('./codeagent-models').isSafeModelId(to)) return '';
++  const list = known && Array.isArray(known.models) ? known.models.filter(Boolean) : [];
++  if (known && known.authoritative && list.length) return list.find(m => eq(m, to)) || '';
++  return to;
++}
++
++module.exports = { FILE, REPLACEMENTS_FILE, lastModel, lastEntry, rememberModel, chooseLaunchModel, recheckLaunchChoice, rememberReplacement, replacementFor };
+diff --git a/core/company-assistant/service.js b/core/company-assistant/service.js
+index d5e3382..42f0a93 100644
+--- a/core/company-assistant/service.js
++++ b/core/company-assistant/service.js
+@@ -1434,7 +1434,10 @@ class CompanyAssistant {
+     const warm = this.warm[toolset];
+     if (warm) {
+       delete this.warm[toolset];
+-      if (this.deps.getSession(warm) && !this.sessionBusy(warm) && this.toolsetFor(warm) === toolset) return warm;
++      const s = this.deps.getSession(warm);
++      // 预开的会话启动时没选上模型、停在「待确认模型」：不拿来答题，关掉新开一个。新开的会话会用用户在确认框里换过的模型
++      // （core/codeagent-launch-model.js replacementFor），不再停下来问（2026-11-12）。模型菜单还在选的不动，等它选完照常用。
++      if (s && s.modelConfirmationRequired !== true && !this.sessionBusy(warm) && this.toolsetFor(warm) === toolset) return warm;
+       this.retire(warm);
+     }
+     return this.openPooled(toolset);
+diff --git a/core/session-manager.js b/core/session-manager.js
+index 75c7ead..c901c56 100644
+--- a/core/session-manager.js
++++ b/core/session-manager.js
+@@ -1921,9 +1921,24 @@ class SessionManager extends EventEmitter {
+       // 个人账号一律选它纠正后的默认模型：新开时它就是指定模型（上面已核对），恢复时按此刻的默认照常起，不选回当初的模型。
+       // 号的权限清单探测过且只有一个模型时就选它，不管 settings.json 写的什么（2026-10-20 公司真机：CodeAgent 启动时把默认模型写回 deepseek）。
+       const pool = require('./codeagent-pool');
+-      const target = codeagentPool ? codeAgentRouteModel(opts) || codeagentPool.model
++      let target = codeagentPool ? codeAgentRouteModel(opts) || codeagentPool.model
+           || pool.strictDefaultModel(pool.readSettingsModel(codeagentPool.account.dir), codeagentPool.account.models, { authoritative: !!codeagentPool.account.modelsAuthoritative }).model || ''
+         : codeAgentExpectedModel({}, { configDir: codeagentConfig.configDir, single: true });
++      // 用户在确认框里把这个号的原模型换过（core/codeagent-launch-model.js rememberReplacement）：自动会话直接用换后的模型起，
++      // 不再每个新会话都按原模型起、选不上、停下来再问一遍（2026-11-12 助理问答反复弹框）。通道指定的模型不替换。
++      if (target && !codeAgentRouteModel(opts)) {
++        try {
++          const known = codeagentPool ? { models: codeagentPool.account.models || [], authoritative: !!codeagentPool.account.modelsAuthoritative }
++            : require('./codeagent-model-route').personalModels({ dataDir: getHubDataDir(), personalDir: codeagentConfig.configDir });
++          const accountKey = codeagentPool ? codeagentPool.account.id : 'personal';
++          const replaced = require('./codeagent-launch-model').replacementFor(getHubDataDir(), accountKey, target, known);
++          if (replaced) {
++            require('./codeagent-models').appendModelLog(getHubDataDir(), { event: 'launch-model-replaced', session: String(id).slice(0, 8),
++              purpose: opts.purpose, from: target, to: replaced, note: '用户在确认框里换过这个号的原模型，自动会话直接用换后的模型' });
++            target = replaced;
++          }
++        } catch (error) { console.warn('[codeagent] 读模型替代记录出错，按原模型起：' + error.message); }
++      }
+       // 不需要或暂时不该开菜单时直接发问题（2026-10-21 同事公司 Hub：自动选模型 13 次全失败、每次都耽误发问题）：
+       // 恢复的会话上一轮就是目标模型作答、这个号连续 3 次没选成（4 小时熔断）。见 core/codeagent-auto-pick.js。
+       // 配置里写的默认模型不再作为跳过的依据（2026-10-22 用户：明明是 DeepSeek 号却按 GLM 起来，写着的值不可信）。
+diff --git a/main/ipc/session-handlers.js b/main/ipc/session-handlers.js
+index 35d3860..5eca460 100644
+--- a/main/ipc/session-handlers.js
++++ b/main/ipc/session-handlers.js
+@@ -1237,7 +1237,9 @@ function registerSessionIpc(ipcMain, deps) {
+         fallback = false;
+         sessionManager.updateSessionMeta(sessionId, { codeagentModelPick: true, modelConfirmationRequired: true, modelUnavailableReason: '启动模型菜单未能选择原模型' });
+         result = { ...result, message: `原模型 ${session.fixedModel} 不可用，请手动选择可用模型后继续。` };
+-        sendToRenderer('session-notice', { sessionId, level: 'error', persistent: true, modelUnavailable: true,
++        // 自动会话启动（助理预开的下一个会话等）：只把会话标成暂停，不弹框。真有问题要发到这个会话时，
++        // 发送前的核对（group-chat-watcher ensureModelBeforeSubmission → confirmSessionModel）会问一次（2026-11-12 助理问答反复弹框）。
++        if (!(automatic && startupPick)) sendToRenderer('session-notice', { sessionId, level: 'error', persistent: true, modelUnavailable: true,
+           originalModel: session.fixedModel, suggestedModel: known.models.find(id => id.toLowerCase() === String(actual).toLowerCase()) || known.models[0] || '',
+           availableModels: known.models, message: result.message });
+       } else {
+@@ -1422,6 +1424,8 @@ function registerSessionIpc(ipcMain, deps) {
+           sendToRenderer('session-notice', { sessionId, level: 'warning',
+             message: `没切到 ${modelId}，先用 CodeAgent 当前模型继续，第一条消息已照常发出（原因：${result.technicalReason || result.message || '未知'}）；需要换的话在终端里 /model 选一次。` });
+         }
++      } else if (!result.ok && showPhase && session && isAutomaticCodeAgent(session) && session.modelConfirmationRequired === true) {
++        // 自动会话启动时没选上原模型、已标成待确认（runCodeAgentPick）：不另发提示，发问题时再问一次（2026-11-12）。
+       } else if (!result.ok) {
+         // 真失败（菜单没关掉、输入框不能用）：第一条消息被退回，常驻提示讲清原因和下一步，不用一闪而过的提示。
+         const why = result.technicalReason && result.technicalReason !== result.message ? `（${result.technicalReason}）` : '';
+@@ -1566,6 +1570,16 @@ function registerSessionIpc(ipcMain, deps) {
+         if (sessionManager.isAgentTurnActive?.(sessionId)) throw stopped('当前回答仍在运行，本条消息未发送。');
+         const result = await switchCodeAgentModel({ sessionId, modelId: selected }, { pendingConfirmation: true });
+         if (!result?.ok) throw stopped(result?.message || '模型未确认切换，本条消息未发送。');
++        // 自动会话不改号的默认模型，下一个新会话还会按原模型起：记下「原模型 → 新模型」，之后这个号的自动会话直接用新模型
++        // （core/session-manager.js 自动会话选模型处读它；2026-11-12 助理问答每问一个会话、反复弹框）。
++        const original = error.model || session.fixedModel;
++        if (isAutomaticCodeAgent(session) && codeagentModels.isSafeModelId(original) && original.toLowerCase() !== String(selected).toLowerCase()) {
++          try {
++            const dataDir = require('../../core/data-dir').getHubDataDir();
++            require('../../core/codeagent-launch-model').rememberReplacement(dataDir, session.codeagentPoolAccount || 'personal', original, selected);
++            codeagentModels.appendModelLog(dataDir, { event: 'model-replacement-saved', session: String(sessionId).slice(0, 8), from: original, to: selected });
++          } catch (failure) { console.warn('[codeagent] 记模型替代失败：' + failure.message); }
++        }
+         return result;
+       });
+       const settle = (failure, result) => {
+diff --git a/tests/unit-company-assistant-session-pool.test.js b/tests/unit-company-assistant-session-pool.test.js
+index fe9caba..4bde344 100644
+--- a/tests/unit-company-assistant-session-pool.test.js
++++ b/tests/unit-company-assistant-session-pool.test.js
+@@ -307,3 +307,20 @@ test('已绑定记录的会话答得慢：不算没送达，不重发', async t
+   await f.a.collectJob('chat'); await f.settle();
+   assert.equal(f.prompts.length, 1);
+ });
++
++test('预开的会话停在「待确认模型」时不拿来答题，关掉另开一个（2026-11-12 助理问答反复弹框）', async t => {
++  const f = fixture(t);
++  f.a.ask('今天有哪些会');
++  await f.settle();
++  const p1 = f.prompts[0];
++  f.answer(p1.id, '今天 1 场会 [mtg:1]。');
++  await f.a.collectJob('chat');
++  await f.settle();
++  const warm = f.a.warm.desk;
++  assert.ok(warm);
++  f.sessions.get(warm).modelConfirmationRequired = true;
++  f.a.ask('明天呢');
++  await f.settle();
++  assert.notEqual(f.prompts[1].id, warm, '第二问不用停住的预开会话');
++  assert.ok(f.closed.includes(warm), '停住的预开会话被关掉');
++});
+diff --git a/tests/unit-session-model-pin.test.js b/tests/unit-session-model-pin.test.js
+index d916f80..b84bc1c 100644
+--- a/tests/unit-session-model-pin.test.js
++++ b/tests/unit-session-model-pin.test.js
+@@ -975,3 +975,86 @@ for (const action of ['confirm', 'cancel']) test(`sleeping team member model con
+   for (let i = 0; i < 8; i++) await new Promise(setImmediate);
+   assert.notEqual(service.listTeams()[0].messages.find(x => x.to === 'm1').stage, 'waiting-model');
+ });
++
++// 2026-11-12 助理问答反复弹框：自动会话每问开一个新会话，用户在确认框里换过模型后，新会话不该再按原模型起、再问一遍。
++test('model replacement records are per account, need a different model and respect an authoritative list', t => {
++  const f = fixture(t);
++  const lm = require('../core/codeagent-launch-model');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD), '');
++  assert.equal(lm.rememberReplacement(f.dataDir, 'personal', OLD, OLD), false, 'same model is not a replacement');
++  assert.equal(lm.rememberReplacement(f.dataDir, 'personal', OLD, NEXT), true);
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD.toLowerCase()), NEXT, 'lookup ignores case');
++  assert.equal(lm.replacementFor(f.dataDir, 'pool-a', OLD), '', 'another account keeps its own model');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD, { models: [OLD], authoritative: true }), '', 'replacement left the authoritative list');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD, { models: [NEXT.toUpperCase()], authoritative: true }), NEXT.toUpperCase(), 'uses the list spelling');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD, { models: [], authoritative: false }), NEXT, 'unknown list keeps the user choice');
++  lm.rememberReplacement(f.dataDir, 'personal', NEXT, OLD);
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD), '', 'choosing the old model again drops the reverse record');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', NEXT), OLD);
++});
++
++test('a new automatic session starts with the model the user chose to replace the account default', async t => {
++  const f = fixture(t);
++  const before = process.env.CLAUDE_HUB_E2E_ALLOW_MISSING_CLI;
++  process.env.CLAUDE_HUB_E2E_ALLOW_MISSING_CLI = '1';
++  t.after(() => { if (before === undefined) delete process.env.CLAUDE_HUB_E2E_ALLOW_MISSING_CLI; else process.env.CLAUDE_HUB_E2E_ALLOW_MISSING_CLI = before; });
++  t.mock.method(require('../core/codeagent-config'), 'resolveCodeAgentConfig', () => ({ command: 'never-run', configDir: f.configDir }));
++  const logs = [];
++  t.mock.method(models, 'appendModelLog', (_dir, entry) => { logs.push(entry); });
++  // 号的默认模型是 NEXT（fixture 的 settings.json），用户在确认框里把它换成了 OLD。
++  require('../core/codeagent-launch-model').rememberReplacement(f.dataDir, 'personal', NEXT, OLD);
++  const manager = new SessionManager();
++  await Promise.resolve().then(() => manager.createSession('codeagent', { id: 'assistant-next', cwd: f.cwd, purpose: 'company-assistant', autonomous: true })).catch(() => {});
++  assert.deepEqual(logs.filter(e => e.event === 'launch-model-replaced').map(e => [e.from, e.to]), [[NEXT, OLD]]);
++  assert.equal(logs.find(e => e.event === 'launch')?.model, OLD, 'the session is launched with the replacement');
++});
++
++test('a paused automatic startup asks nothing until a question is sent', async t => {
++  const f = fixture(t, { policy: 'stop-and-ask' });
++  const picker = require('../core/codeagent-model-picker');
++  t.mock.method(picker, 'pickModel', async () => ({ ok: false, inputReady: true, message: 'menu target missing' }));
++  const current = { id: 'assistant-warm', kind: 'codeagent', purpose: 'company-assistant', fixedModel: OLD, currentModel: { id: OLD }, codeagentConfigDir: f.configDir };
++  const listeners = new Map(), notices = [];
++  const manager = { getSession: () => current, on: (name, fn) => listeners.set(name, fn), updateSessionMeta: (_id, fields) => Object.assign(current, fields) };
++  require('../main/ipc/session-handlers').registerSessionIpc({ handle() {}, on() {} }, { sessionManager: manager,
++    sendToRenderer: (name, payload) => { if (name === 'session-notice') notices.push(payload); } });
++  listeners.get('codeagent-model-pick')({ sessionId: current.id, modelId: OLD, reason: 'launch' });
++  await assert.rejects(picker.waitForPick(current.id), error => error.notSent === true);
++  assert.equal(current.modelConfirmationRequired, true, 'the session is still paused');
++  assert.deepEqual(notices, [], 'no dialog and no sticky notice for a session nobody is using yet');
++});
++
++test('confirming a model for an automatic session remembers it for the next sessions of that account', async t => {
++  const f = fixture(t, { ids: [NEXT], policy: 'stop-and-ask' });
++  const manager = Object.create(SessionManager.prototype);
++  require('node:events').EventEmitter.call(manager);
++  manager._refreshOpenIdentity = () => {};
++  const info = { id: 'assistant-confirm', kind: 'codeagent', purpose: 'company-assistant', status: 'idle', title: '助理问答 · 周报',
++    fixedModel: OLD, currentModel: { id: OLD }, codeagentModelPick: true, modelConfirmationRequired: true, codeagentConfigDir: f.configDir, cwd: f.cwd };
++  manager.sessions = new Map([[info.id, { info, codeagentSettingsActive: false }]]);
++  t.mock.method(require('../core/codeagent-model-picker'), 'pickModel', async () => ({ ok: true, confirmed: true }));
++  const asked = [];
++  const ops = require('../main/ipc/session-handlers').registerSessionIpc({ handle() {}, on() {} },
++    { sessionManager: manager, sendToRenderer() {}, requestModelConfirmation: async request => { asked.push(request); return NEXT; } });
++  const result = await ops.confirmSessionModel(info.id, require('../core/session-model-pin').unavailableError(OLD, '尚未完成原模型选择', [NEXT], NEXT));
++  assert.equal(result.ok, true);
++  assert.equal(asked.length, 1);
++  assert.equal(info.fixedModel, NEXT);
++  const lm = require('../core/codeagent-launch-model');
++  assert.equal(lm.replacementFor(f.dataDir, 'personal', OLD), NEXT);
++});
++
++test('confirming a model for a manual session leaves no automatic replacement', async t => {
++  const f = fixture(t, { ids: [NEXT], policy: 'stop-and-ask' });
++  const manager = Object.create(SessionManager.prototype);
++  require('node:events').EventEmitter.call(manager);
++  manager._refreshOpenIdentity = () => {};
++  const info = { id: 'manual-confirm', kind: 'codeagent', status: 'idle',
++    fixedModel: OLD, currentModel: { id: OLD }, codeagentModelPick: true, modelConfirmationRequired: true, codeagentConfigDir: f.configDir, cwd: f.cwd };
++  manager.sessions = new Map([[info.id, { info, codeagentSettingsActive: false }]]);
++  t.mock.method(require('../core/codeagent-model-picker'), 'pickModel', async () => ({ ok: true, confirmed: true }));
++  const ops = require('../main/ipc/session-handlers').registerSessionIpc({ handle() {}, on() {} },
++    { sessionManager: manager, sendToRenderer() {}, requestModelConfirmation: async () => NEXT });
++  await ops.confirmSessionModel(info.id, require('../core/session-model-pin').unavailableError(OLD, 'x', [NEXT], NEXT));
++  assert.equal(require('../core/codeagent-launch-model').replacementFor(f.dataDir, 'personal', OLD), '');
++});
+-- 
+2.43.0
+
